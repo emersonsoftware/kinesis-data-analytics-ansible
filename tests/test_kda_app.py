@@ -14,9 +14,11 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.module.check_mode = False
         self.module.exit_json = mock.MagicMock()
         self.module.fail_json = mock.MagicMock()
-        self.kda_app = KinesisDataAnalyticsApp(self.module)
-        self.kda_app.client = mock.MagicMock()
-
+        self.app = KinesisDataAnalyticsApp(self.module)
+        self.app.client = mock.MagicMock()
+        self.app.module.params = {
+            'name': 'testifyApp',
+        }
         reload(kda_app)
 
     def test_boto_module_not_found(self):
@@ -51,6 +53,17 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
     def test_boto3_client_properly_instantiated(self, mock_boto):
         KinesisDataAnalyticsApp(self.module)
         mock_boto.client.assert_called_once_with('kinesisanalytics')
+
+    def test_process_request_calls_describe_application_and_stores_result_when_invoked(self):
+        resp = {
+            'app': 'lol',
+        }
+        self.app.client.describe_application = mock.MagicMock(return_value=resp)
+
+        self.app.process_request()
+
+        self.assertEqual(resp, self.app.current_state)
+        self.app.client.describe_application.assert_called_once_with(ApplicationName='testifyApp')
 
 
 if __name__ == '__main__':

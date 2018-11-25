@@ -12,11 +12,16 @@ except ImportError:
 
 
 class KinesisDataAnalyticsApp:
+    current_state = None
+
     def __init__(self, module):
         self.module = module
         if not HAS_BOTO3:
             self.module.fail_json(msg='boto and boto3 are required for this module')
         self.client = boto3.client('kinesisanalytics')
+
+    def process_request(self):
+        self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
 
 
 def main():
