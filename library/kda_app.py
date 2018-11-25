@@ -21,7 +21,20 @@ class KinesisDataAnalyticsApp:
         self.client = boto3.client('kinesisanalytics')
 
     def process_request(self):
-        self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
+        status = self.get_current_state()
+        if status is 'AppNotFound':
+            self.client.create_application(ApplicationName='', ApplicationDescription='', Inputs=[], Outputs=[], CloudWatchLoggingOptions=[], ApplicationCode='')
+
+    def get_current_state(self):
+        from botocore.exceptions import ClientError
+        try:
+            self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
+            return 'AppFound'
+        except ClientError as err:
+            if err.response['Error']['Code'] == "ResourceNotFoundException":
+                return 'AppNotFound'
+            else:
+                return 'Unknown'
 
 
 def main():
