@@ -19,6 +19,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client = mock.MagicMock()
         self.app.module.params = {
             'name': 'testifyApp',
+            'description': 'maDescription',
+            'code': 'mycode',
         }
         reload(kda_app)
 
@@ -85,6 +87,15 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.client.describe_application.assert_called_once()
         self.app.client.create_application.assert_not_called()
+
+    def test_create_application_base_parameters_mapped_correctly(self):
+        resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}
+        self.app.client.describe_application = mock.MagicMock(side_effect=ClientError(resource_not_found, ''))
+        self.app.client.create_application = mock.MagicMock()
+
+        self.app.process_request()
+
+        self.app.client.create_application.assert_called_once_with(ApplicationName='testifyApp', ApplicationDescription='maDescription', ApplicationCode='mycode', Inputs=mock.ANY, Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
 
 
 if __name__ == '__main__':

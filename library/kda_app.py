@@ -23,7 +23,7 @@ class KinesisDataAnalyticsApp:
     def process_request(self):
         status = self.get_current_state()
         if status is 'AppNotFound':
-            self.client.create_application(ApplicationName='', ApplicationDescription='', Inputs=[], Outputs=[], CloudWatchLoggingOptions=[], ApplicationCode='')
+            self.client.create_application(ApplicationName=self.module.params['name'], ApplicationDescription=self.module.params['description'], Inputs=[], Outputs=[], CloudWatchLoggingOptions=[], ApplicationCode=self.module.params['code'])
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
