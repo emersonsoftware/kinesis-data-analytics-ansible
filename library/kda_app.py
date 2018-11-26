@@ -23,7 +23,7 @@ class KinesisDataAnalyticsApp:
     def process_request(self):
         status = self.get_current_state()
         if status is 'AppNotFound':
-            self.client.create_application(ApplicationName=self.module.params['name'], ApplicationDescription=self.module.params['description'], Inputs=[], Outputs=[], CloudWatchLoggingOptions=[], ApplicationCode=self.module.params['code'])
+            self.client.create_application(ApplicationName=self.module.params['name'], ApplicationDescription=self.module.params['description'], Inputs=self.get_input_configuration(), Outputs=[], CloudWatchLoggingOptions=[], ApplicationCode=self.module.params['code'])
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -35,6 +35,58 @@ class KinesisDataAnalyticsApp:
                 return 'AppNotFound'
             else:
                 return 'Unknown'
+
+    def get_input_configuration(self):
+        inputs = {
+            'NamePrefix': self.module.params['inputs']['name_prefix'],
+            'InputParallelism': {
+                'Count': self.module.params['inputs']['parallelism']
+            },
+            'InputSchema': {
+                'RecordFormat': {
+                    'RecordFormatType': self.module.params['inputs']['schema']['format']['type'],
+                    'MappingParameters': {}
+                },
+                'RecordColumns': [],
+            }
+        }
+
+        if self.module.params['inputs']['kinesis']['type'] == 'streams':
+            inputs['KinesisStreamsInput'] = {
+                'ResourceARN': self.module.params['inputs']['kinesis']['resource_arn'],
+                'RoleARN': self.module.params['inputs']['kinesis']['role_arn'],
+            }
+        elif self.module.params['inputs']['kinesis']['type'] == 'firehose':
+            inputs['KinesisFirehoseInput'] = {
+                'ResourceARN': self.module.params['inputs']['kinesis']['resource_arn'],
+                'RoleARN': self.module.params['inputs']['kinesis']['role_arn'],
+            }
+
+        if 'pre_processor' in self.module.params['inputs']:
+            inputs['InputProcessingConfiguration'] = {}
+            inputs['InputProcessingConfiguration']['InputLambdaProcessor'] = {
+                'ResourceARN': self.module.params['inputs']['pre_processor']['resource_arn'],
+                'RoleARN': self.module.params['inputs']['pre_processor']['role_arn'],
+            }
+
+        if self.module.params['inputs']['schema']['format']['type'] == 'JSON':
+            inputs['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
+                'RecordRowPath': self.module.params['inputs']['schema']['format']['json_mapping_row_path'],
+            }
+        elif self.module.params['inputs']['schema']['format']['type'] == 'CSV':
+            inputs['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
+                'RecordRowDelimiter': self.module.params['inputs']['schema']['format']['csv_mapping_row_delimiter'],
+                'RecordColumnDelimiter': self.module.params['inputs']['schema']['format']['csv_mapping_column_delimiter'],
+            }
+
+        for column in self.module.params['inputs']['schema']['columns']:
+            inputs['InputSchema']['RecordColumns'].append({
+                'Mapping': column['mapping'],
+                'Name': column['name'],
+                'SqlType': column['type'],
+            })
+
+        return inputs
 
 
 def main():

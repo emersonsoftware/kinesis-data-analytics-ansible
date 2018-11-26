@@ -4,10 +4,12 @@ import library.kda_app as kda_app
 from library.kda_app import KinesisDataAnalyticsApp
 import mock
 from mock import patch
-import unittest
 from botocore.exceptions import ClientError
+from ddt import ddt, data, unpack
+import unittest
 
 
+@ddt
 class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
     def setUp(self):
@@ -21,6 +23,34 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             'name': 'testifyApp',
             'description': 'maDescription',
             'code': 'mycode',
+            'inputs': {
+                'name_prefix': 'mayBeinMemoRyAppNaMe',
+                'parallelism': 1,
+                'kinesis': {
+                    'type': 'streams',
+                    'resource_arn': 'some::kindaa::arn',
+                    'role_arn': 'some::kindaa::arn'
+                },
+                'schema': {
+                    'columns': [
+                        {
+                            'name': 'sensor',
+                            'type': 'VARCHAR(1)',
+                            'mapping': '$.sensor_id',
+                        },
+                        {
+                            'name': 'temp',
+                            'type': 'NUMERIC',
+                            'mapping': '$.temp',
+                        },
+                    ],
+                    'format': {
+                        'type': 'JSON',
+                        'json_mapping_row_path': '$',
+                    }
+                }
+
+            }
         }
         reload(kda_app)
 
@@ -69,9 +99,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.describe_application.assert_called_once_with(ApplicationName='testifyApp')
 
     def test_process_request_calls_create_application_when_application_not_found(self):
-        resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}
-        self.app.client.describe_application = mock.MagicMock(side_effect=ClientError(resource_not_found, ''))
-        self.app.client.create_application = mock.MagicMock()
+        self.setup_for_create_application()
 
         self.app.process_request()
 
@@ -89,13 +117,87 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.create_application.assert_not_called()
 
     def test_create_application_base_parameters_mapped_correctly(self):
-        resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}
-        self.app.client.describe_application = mock.MagicMock(side_effect=ClientError(resource_not_found, ''))
-        self.app.client.create_application = mock.MagicMock()
+        self.setup_for_create_application()
 
         self.app.process_request()
 
         self.app.client.create_application.assert_called_once_with(ApplicationName='testifyApp', ApplicationDescription='maDescription', ApplicationCode='mycode', Inputs=mock.ANY, Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
+
+    @data(('streams', 0, 'JSON'), ('streams', 1, 'CSV'), ('firehose', 0, 'CSV'), ('firehose', 1, 'JSON'))
+    @unpack
+    def test_create_application_input_parameter_mapped_correctly(self, stream_type, pre_processor, format):
+        self.setup_for_create_application()
+        self.app.module.params['inputs']['kinesis']['type'] = stream_type
+        self.app.module.params['inputs']['schema']['format']['type'] = format
+        if pre_processor == 1:
+            self.app.module.params['inputs']['pre_processor'] = {
+                'resource_arn': 'some::kindaaprepo::arn',
+                'role_arn': 'some::kindaapreporole::arn'
+            }
+        if format == 'CSV':
+            self.app.module.params['inputs']['schema']['format']['csv_mapping_row_delimiter'] = '\n'
+            self.app.module.params['inputs']['schema']['format']['csv_mapping_column_delimiter'] = ','
+
+        self.app.process_request()
+
+        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=self.get_expected_input_configuration(), Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
+
+    def get_expected_input_configuration(self):
+        expected = {
+            'NamePrefix': self.app.module.params['inputs']['name_prefix'],
+            'InputParallelism': {
+                'Count': self.app.module.params['inputs']['parallelism']
+            },
+            'InputSchema': {
+                'RecordFormat': {
+                    'RecordFormatType': self.app.module.params['inputs']['schema']['format']['type'],
+                    'MappingParameters': {}
+                },
+                'RecordColumns': [],
+            }
+        }
+
+        if self.app.module.params['inputs']['kinesis']['type'] == 'streams':
+            expected['KinesisStreamsInput'] = {
+                'ResourceARN': self.app.module.params['inputs']['kinesis']['resource_arn'],
+                'RoleARN': self.app.module.params['inputs']['kinesis']['role_arn'],
+            }
+        elif self.app.module.params['inputs']['kinesis']['type'] == 'firehose':
+            expected['KinesisFirehoseInput'] = {
+                'ResourceARN': self.app.module.params['inputs']['kinesis']['resource_arn'],
+                'RoleARN': self.app.module.params['inputs']['kinesis']['role_arn'],
+            }
+
+        if 'pre_processor' in self.app.module.params['inputs']:
+            expected['InputProcessingConfiguration'] = {}
+            expected['InputProcessingConfiguration']['InputLambdaProcessor'] = {
+                'ResourceARN': self.app.module.params['inputs']['pre_processor']['resource_arn'],
+                'RoleARN': self.app.module.params['inputs']['pre_processor']['role_arn'],
+            }
+
+        if self.app.module.params['inputs']['schema']['format']['type'] == 'JSON':
+            expected['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
+                'RecordRowPath': self.app.module.params['inputs']['schema']['format']['json_mapping_row_path'],
+            }
+        elif self.app.module.params['inputs']['schema']['format']['type'] == 'CSV':
+            expected['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
+                'RecordRowDelimiter': self.app.module.params['inputs']['schema']['format']['csv_mapping_row_delimiter'],
+                'RecordColumnDelimiter': self.app.module.params['inputs']['schema']['format']['csv_mapping_column_delimiter'],
+            }
+
+        for column in self.app.module.params['inputs']['schema']['columns']:
+            expected['InputSchema']['RecordColumns'].append({
+                'Mapping': column['mapping'],
+                'Name': column['name'],
+                'SqlType': column['type'],
+            })
+
+        return expected
+
+    def setup_for_create_application(self):
+        resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}
+        self.app.client.describe_application = mock.MagicMock(side_effect=ClientError(resource_not_found, ''))
+        self.app.client.create_application = mock.MagicMock()
 
 
 if __name__ == '__main__':
