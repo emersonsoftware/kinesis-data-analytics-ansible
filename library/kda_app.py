@@ -120,11 +120,12 @@ class KinesisDataAnalyticsApp:
     def get_log_configuration(self):
         logs = []
 
-        for item in self.module.params['logs']:
-            logs.append({
-                'LogStreamARN': item['stream_arn'],
-                'RoleARN': item['role_arn'],
-            })
+        if 'logs' in self.module.params:
+            for item in self.module.params['logs']:
+                logs.append({
+                    'LogStreamARN': item['stream_arn'],
+                    'RoleARN': item['role_arn'],
+                })
 
         return logs
 
