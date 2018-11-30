@@ -83,7 +83,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'stream_arn': 'some::kindaalog1::arn',
                     'role_arn': 'some::kindaalog1::arn',
                 },
-            ]
+            ],
+            'starting_position': 'LAST_STOPPED_POINT',
         }
         reload(kda_app)
 
@@ -154,7 +155,10 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.process_request()
 
-        self.app.client.create_application.assert_called_once_with(ApplicationName='testifyApp', ApplicationDescription='maDescription', ApplicationCode='mycode', Inputs=mock.ANY, Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
+        self.app.client.create_application.assert_called_once_with(ApplicationName='testifyApp',
+                                                                   ApplicationDescription='maDescription',
+                                                                   ApplicationCode='mycode', Inputs=mock.ANY,
+                                                                   Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
 
     @data(('streams', 0, 'JSON'), ('streams', 1, 'CSV'), ('firehose', 0, 'CSV'), ('firehose', 1, 'JSON'))
     @unpack
@@ -173,21 +177,33 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.process_request()
 
-        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=[self.get_expected_input_configuration()], Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
+        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY,
+                                                                   ApplicationDescription=mock.ANY,
+                                                                   ApplicationCode=mock.ANY,
+                                                                   Inputs=[self.get_expected_input_configuration()],
+                                                                   Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
 
     def test_create_application_output_parameter_mapped_correctly(self):
         self.setup_for_create_application()
 
         self.app.process_request()
 
-        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=self.get_expected_output_configuration(), CloudWatchLoggingOptions=mock.ANY)
+        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY,
+                                                                   ApplicationDescription=mock.ANY,
+                                                                   ApplicationCode=mock.ANY, Inputs=mock.ANY,
+                                                                   Outputs=self.get_expected_output_configuration(),
+                                                                   CloudWatchLoggingOptions=mock.ANY)
 
     def test_create_application_log_parameter_mapped_correctly(self):
         self.setup_for_create_application()
 
         self.app.process_request()
 
-        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=mock.ANY, CloudWatchLoggingOptions=self.get_expected_log_configuration())
+        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY,
+                                                                   ApplicationDescription=mock.ANY,
+                                                                   ApplicationCode=mock.ANY, Inputs=mock.ANY,
+                                                                   Outputs=mock.ANY,
+                                                                   CloudWatchLoggingOptions=self.get_expected_log_configuration())
 
     def test_create_application_log_parameter_not_mapped_when_logs_not_supplied(self):
         self.setup_for_create_application()
@@ -195,7 +211,27 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.process_request()
 
-        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=mock.ANY)
+        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY,
+                                                                   ApplicationDescription=mock.ANY,
+                                                                   ApplicationCode=mock.ANY, Inputs=mock.ANY,
+                                                                   Outputs=mock.ANY)
+
+    def test_start_application_when_create_application_succeed(self):
+        self.setup_for_create_application()
+
+        self.app.process_request()
+
+        self.app.client.start_application.assert_called_once()
+
+    @data('NOW', 'TRIM_HORIZON', 'LAST_STOPPED_POINT')
+    def test_start_application_called_with_expected_parameters(self, value):
+        self.setup_for_create_application()
+        self.app.module.params['starting_position'] = value
+
+        self.app.process_request()
+
+        self.app.client.start_application.assert_called_once_with(ApplicationName='testifyApp',
+                                                                  InputConfigurations=self.get_input_start_configuration())
 
     def get_expected_input_configuration(self):
         expected = {
@@ -237,7 +273,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         elif self.app.module.params['inputs']['schema']['format']['type'] == 'CSV':
             expected['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
                 'RecordRowDelimiter': self.app.module.params['inputs']['schema']['format']['csv_mapping_row_delimiter'],
-                'RecordColumnDelimiter': self.app.module.params['inputs']['schema']['format']['csv_mapping_column_delimiter'],
+                'RecordColumnDelimiter': self.app.module.params['inputs']['schema']['format'][
+                    'csv_mapping_column_delimiter'],
             }
 
         for column in self.app.module.params['inputs']['schema']['columns']:
@@ -289,10 +326,25 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         return expected
 
+    def get_input_start_configuration(self):
+        expected = []
+
+        item = {
+            'Id': '1.1',
+            'InputStartingPositionConfiguration': {}
+        }
+
+        item['InputStartingPositionConfiguration']['InputStartingPosition'] = self.app.module.params['starting_position']
+
+        expected.append(item)
+
+        return expected
+
     def setup_for_create_application(self):
         resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}
         self.app.client.describe_application = mock.MagicMock(side_effect=ClientError(resource_not_found, ''))
         self.app.client.create_application = mock.MagicMock()
+        self.app.client.start_application = mock.MagicMock()
 
 
 if __name__ == '__main__':

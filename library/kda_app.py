@@ -24,20 +24,27 @@ class KinesisDataAnalyticsApp:
     def process_request(self):
         status = self.get_current_state()
         if status is 'AppNotFound':
-            if 'logs' in self.module.params:
-                self.client.create_application(ApplicationName=self.module.params['name'],
-                                               ApplicationDescription=self.module.params['description'],
-                                               Inputs=[self.get_input_configuration()],
-                                               Outputs=self.get_output_configuration(),
-                                               CloudWatchLoggingOptions=self.get_log_configuration(),
-                                               ApplicationCode=self.module.params['code'])
-            else:
-                self.client.create_application(ApplicationName=self.module.params['name'],
-                                               ApplicationDescription=self.module.params['description'],
-                                               Inputs=[self.get_input_configuration()],
-                                               Outputs=self.get_output_configuration(),
-                                               ApplicationCode=self.module.params['code'])
+            self.create_new_application()
+            self.start_application()
 
+    def start_application(self):
+        self.client.start_application(ApplicationName=self.module.params['name'],
+                                      InputConfigurations=self.get_input_start_configuration())
+
+    def create_new_application(self):
+        if 'logs' in self.module.params:
+            self.client.create_application(ApplicationName=self.module.params['name'],
+                                           ApplicationDescription=self.module.params['description'],
+                                           Inputs=[self.get_input_configuration()],
+                                           Outputs=self.get_output_configuration(),
+                                           CloudWatchLoggingOptions=self.get_log_configuration(),
+                                           ApplicationCode=self.module.params['code'])
+        else:
+            self.client.create_application(ApplicationName=self.module.params['name'],
+                                           ApplicationDescription=self.module.params['description'],
+                                           Inputs=[self.get_input_configuration()],
+                                           Outputs=self.get_output_configuration(),
+                                           ApplicationCode=self.module.params['code'])
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -141,6 +148,20 @@ class KinesisDataAnalyticsApp:
             })
 
         return logs
+
+    def get_input_start_configuration(self):
+        input_config = []
+
+        item = {
+            'Id': '1.1',
+            'InputStartingPositionConfiguration': {}
+        }
+
+        item['InputStartingPositionConfiguration']['InputStartingPosition'] = self.module.params['starting_position']
+
+        input_config.append(item)
+
+        return input_config
 
 
 def main():
