@@ -50,7 +50,30 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     }
                 }
 
-            }
+            },
+            'outputs': [
+                {
+                    'name': 'inmemoryOutPutStream',
+                    'type': 'streams',
+                    'resource_arn': 'some::kindaa::arn',
+                    'role_arn': 'some::kindaa::arn',
+                    'format_type': 'JSON',
+                },
+                {
+                    'name': 'inmemoryOutPutStream1',
+                    'type': 'firehose',
+                    'resource_arn': 'some::kindaa1::arn',
+                    'role_arn': 'some::kindaa1::arn',
+                    'format_type': 'CSV',
+                },
+                {
+                    'name': 'inmemoryOutPutStream2',
+                    'type': 'lambda',
+                    'resource_arn': 'some::kindaa2::arn',
+                    'role_arn': 'some::kindaa2::arn',
+                    'format_type': 'JSON',
+                },
+            ]
         }
         reload(kda_app)
 
@@ -142,6 +165,13 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=[self.get_expected_input_configuration()], Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
 
+    def test_create_application_output_parameter_mapped_correctly(self):
+        self.setup_for_create_application()
+
+        self.app.process_request()
+
+        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=self.get_expected_output_configuration(), CloudWatchLoggingOptions=mock.ANY)
+
     def get_expected_input_configuration(self):
         expected = {
             'NamePrefix': self.app.module.params['inputs']['name_prefix'],
@@ -191,6 +221,35 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 'Name': column['name'],
                 'SqlType': column['type'],
             })
+
+        return expected
+
+    def get_expected_output_configuration(self):
+        expected = []
+
+        for item in self.app.module.params['outputs']:
+            output = {
+                'Name': item['name'],
+                'DestinationSchema': {
+                    'RecordFormatType': item['format_type']
+                }
+            }
+            if item['type'] == 'streams':
+                output['KinesisStreamsOutput'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            elif item['type'] == 'firehose':
+                output['KinesisFirehoseOutput'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            elif item['type'] == 'lambda':
+                output['LambdaOutput'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            expected.append(output)
 
         return expected
 

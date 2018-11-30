@@ -23,7 +23,7 @@ class KinesisDataAnalyticsApp:
     def process_request(self):
         status = self.get_current_state()
         if status is 'AppNotFound':
-            self.client.create_application(ApplicationName=self.module.params['name'], ApplicationDescription=self.module.params['description'], Inputs=[self.get_input_configuration()], Outputs=[], CloudWatchLoggingOptions=[], ApplicationCode=self.module.params['code'])
+            self.client.create_application(ApplicationName=self.module.params['name'], ApplicationDescription=self.module.params['description'], Inputs=[self.get_input_configuration()], Outputs=self.get_output_configuration(), CloudWatchLoggingOptions=[], ApplicationCode=self.module.params['code'])
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -87,6 +87,35 @@ class KinesisDataAnalyticsApp:
             })
 
         return inputs
+
+    def get_output_configuration(self):
+        outputs = []
+
+        for item in self.module.params['outputs']:
+            output = {
+                'Name': item['name'],
+                'DestinationSchema': {
+                    'RecordFormatType': item['format_type']
+                }
+            }
+            if item['type'] == 'streams':
+                output['KinesisStreamsOutput'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            elif item['type'] == 'firehose':
+                output['KinesisFirehoseOutput'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            elif item['type'] == 'lambda':
+                output['LambdaOutput'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            outputs.append(output)
+
+        return outputs
 
 
 def main():
