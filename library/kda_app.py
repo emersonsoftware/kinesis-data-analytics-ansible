@@ -23,7 +23,7 @@ class KinesisDataAnalyticsApp:
     def process_request(self):
         status = self.get_current_state()
         if status is 'AppNotFound':
-            self.client.create_application(ApplicationName=self.module.params['name'], ApplicationDescription=self.module.params['description'], Inputs=[self.get_input_configuration()], Outputs=self.get_output_configuration(), CloudWatchLoggingOptions=[], ApplicationCode=self.module.params['code'])
+            self.client.create_application(ApplicationName=self.module.params['name'], ApplicationDescription=self.module.params['description'], Inputs=[self.get_input_configuration()], Outputs=self.get_output_configuration(), CloudWatchLoggingOptions=self.get_log_configuration(), ApplicationCode=self.module.params['code'])
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -116,6 +116,17 @@ class KinesisDataAnalyticsApp:
             outputs.append(output)
 
         return outputs
+
+    def get_log_configuration(self):
+        logs = []
+
+        for item in self.module.params['logs']:
+            logs.append({
+                'LogStreamARN': item['stream_arn'],
+                'RoleARN': item['role_arn'],
+            })
+
+        return logs
 
 
 def main():

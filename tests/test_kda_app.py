@@ -73,6 +73,16 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'role_arn': 'some::kindaa2::arn',
                     'format_type': 'JSON',
                 },
+            ],
+            'logs': [
+                {
+                    'stream_arn': 'some::kindaalog::arn',
+                    'role_arn': 'some::kindaalog::arn',
+                },
+                {
+                    'stream_arn': 'some::kindaalog1::arn',
+                    'role_arn': 'some::kindaalog1::arn',
+                },
             ]
         }
         reload(kda_app)
@@ -172,6 +182,13 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=self.get_expected_output_configuration(), CloudWatchLoggingOptions=mock.ANY)
 
+    def test_create_application_log_parameter_mapped_correctly(self):
+        self.setup_for_create_application()
+
+        self.app.process_request()
+
+        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=mock.ANY, CloudWatchLoggingOptions=self.get_expected_log_configuration())
+
     def get_expected_input_configuration(self):
         expected = {
             'NamePrefix': self.app.module.params['inputs']['name_prefix'],
@@ -250,6 +267,17 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'RoleARN': item['role_arn'],
                 }
             expected.append(output)
+
+        return expected
+
+    def get_expected_log_configuration(self):
+        expected = []
+
+        for item in self.app.module.params['logs']:
+            expected.append({
+                'LogStreamARN': item['stream_arn'],
+                'RoleARN': item['role_arn'],
+            })
 
         return expected
 
