@@ -6,6 +6,7 @@ try:
     import boto3
     import boto
     from botocore.exceptions import BotoCoreError
+
     HAS_BOTO3 = True
 except ImportError:
     HAS_BOTO3 = False
@@ -23,7 +24,20 @@ class KinesisDataAnalyticsApp:
     def process_request(self):
         status = self.get_current_state()
         if status is 'AppNotFound':
-            self.client.create_application(ApplicationName=self.module.params['name'], ApplicationDescription=self.module.params['description'], Inputs=[self.get_input_configuration()], Outputs=self.get_output_configuration(), CloudWatchLoggingOptions=self.get_log_configuration(), ApplicationCode=self.module.params['code'])
+            if 'logs' in self.module.params:
+                self.client.create_application(ApplicationName=self.module.params['name'],
+                                               ApplicationDescription=self.module.params['description'],
+                                               Inputs=[self.get_input_configuration()],
+                                               Outputs=self.get_output_configuration(),
+                                               CloudWatchLoggingOptions=self.get_log_configuration(),
+                                               ApplicationCode=self.module.params['code'])
+            else:
+                self.client.create_application(ApplicationName=self.module.params['name'],
+                                               ApplicationDescription=self.module.params['description'],
+                                               Inputs=[self.get_input_configuration()],
+                                               Outputs=self.get_output_configuration(),
+                                               ApplicationCode=self.module.params['code'])
+
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -76,7 +90,8 @@ class KinesisDataAnalyticsApp:
         elif self.module.params['inputs']['schema']['format']['type'] == 'CSV':
             inputs['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
                 'RecordRowDelimiter': self.module.params['inputs']['schema']['format']['csv_mapping_row_delimiter'],
-                'RecordColumnDelimiter': self.module.params['inputs']['schema']['format']['csv_mapping_column_delimiter'],
+                'RecordColumnDelimiter': self.module.params['inputs']['schema']['format'][
+                    'csv_mapping_column_delimiter'],
             }
 
         for column in self.module.params['inputs']['schema']['columns']:
@@ -119,13 +134,11 @@ class KinesisDataAnalyticsApp:
 
     def get_log_configuration(self):
         logs = []
-
-        if 'logs' in self.module.params:
-            for item in self.module.params['logs']:
-                logs.append({
-                    'LogStreamARN': item['stream_arn'],
-                    'RoleARN': item['role_arn'],
-                })
+        for item in self.module.params['logs']:
+            logs.append({
+                'LogStreamARN': item['stream_arn'],
+                'RoleARN': item['role_arn'],
+            })
 
         return logs
 

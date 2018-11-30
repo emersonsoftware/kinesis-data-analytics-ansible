@@ -189,13 +189,13 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=mock.ANY, CloudWatchLoggingOptions=self.get_expected_log_configuration())
 
-    def test_create_application_log_parameter_mapped_correctly_when_logs_not_supplied(self):
+    def test_create_application_log_parameter_not_mapped_when_logs_not_supplied(self):
         self.setup_for_create_application()
         del self.app.module.params['logs']
 
         self.app.process_request()
 
-        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=mock.ANY, CloudWatchLoggingOptions=[])
+        self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY, ApplicationDescription=mock.ANY, ApplicationCode=mock.ANY, Inputs=mock.ANY, Outputs=mock.ANY)
 
     def get_expected_input_configuration(self):
         expected = {
