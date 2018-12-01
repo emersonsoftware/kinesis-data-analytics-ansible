@@ -23,7 +23,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             'name': 'testifyApp',
             'description': 'maDescription',
             'code': 'mycode',
-            'inputs': {
+            'inputs': [{
                 'name_prefix': 'mayBeinMemoRyAppNaMe',
                 'parallelism': 1,
                 'kinesis': {
@@ -50,7 +50,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     }
                 }
 
-            },
+            }],
             'outputs': [
                 {
                     'name': 'inmemoryOutPutStream',
@@ -168,16 +168,17 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
     @unpack
     def test_create_application_input_parameter_mapped_correctly(self, stream_type, pre_processor, format):
         self.setup_for_create_application()
-        self.app.module.params['inputs']['kinesis']['type'] = stream_type
-        self.app.module.params['inputs']['schema']['format']['type'] = format
-        if pre_processor == 1:
-            self.app.module.params['inputs']['pre_processor'] = {
-                'resource_arn': 'some::kindaaprepo::arn',
-                'role_arn': 'some::kindaapreporole::arn'
-            }
-        if format == 'CSV':
-            self.app.module.params['inputs']['schema']['format']['csv_mapping_row_delimiter'] = '\n'
-            self.app.module.params['inputs']['schema']['format']['csv_mapping_column_delimiter'] = ','
+        for input in self.app.module.params['inputs']:
+            input['kinesis']['type'] = stream_type
+            input['schema']['format']['type'] = format
+            if pre_processor == 1:
+                input['pre_processor'] = {
+                    'resource_arn': 'some::kindaaprepo::arn',
+                    'role_arn': 'some::kindaapreporole::arn'
+                }
+            if format == 'CSV':
+                input['schema']['format']['csv_mapping_row_delimiter'] = '\n'
+                input['schema']['format']['csv_mapping_column_delimiter'] = ','
 
         self.app.process_request()
 
@@ -247,55 +248,58 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                                                                    ApplicationUpdate=self.get_expected_app_update_configuration())
 
     def get_expected_input_configuration(self):
-        expected = {
-            'NamePrefix': self.app.module.params['inputs']['name_prefix'],
-            'InputParallelism': {
-                'Count': self.app.module.params['inputs']['parallelism']
-            },
-            'InputSchema': {
-                'RecordFormat': {
-                    'RecordFormatType': self.app.module.params['inputs']['schema']['format']['type'],
-                    'MappingParameters': {}
+        expected = []
+        for item in self.app.module.params['inputs']:
+            input_item = {
+                'NamePrefix': item['name_prefix'],
+                'InputParallelism': {
+                    'Count': item['parallelism']
                 },
-                'RecordColumns': [],
-            }
-        }
-
-        if self.app.module.params['inputs']['kinesis']['type'] == 'streams':
-            expected['KinesisStreamsInput'] = {
-                'ResourceARN': self.app.module.params['inputs']['kinesis']['resource_arn'],
-                'RoleARN': self.app.module.params['inputs']['kinesis']['role_arn'],
-            }
-        elif self.app.module.params['inputs']['kinesis']['type'] == 'firehose':
-            expected['KinesisFirehoseInput'] = {
-                'ResourceARN': self.app.module.params['inputs']['kinesis']['resource_arn'],
-                'RoleARN': self.app.module.params['inputs']['kinesis']['role_arn'],
+                'InputSchema': {
+                    'RecordFormat': {
+                        'RecordFormatType': item['schema']['format']['type'],
+                        'MappingParameters': {}
+                    },
+                    'RecordColumns': [],
+                }
             }
 
-        if 'pre_processor' in self.app.module.params['inputs']:
-            expected['InputProcessingConfiguration'] = {}
-            expected['InputProcessingConfiguration']['InputLambdaProcessor'] = {
-                'ResourceARN': self.app.module.params['inputs']['pre_processor']['resource_arn'],
-                'RoleARN': self.app.module.params['inputs']['pre_processor']['role_arn'],
-            }
+            if item['kinesis']['type'] == 'streams':
+                input_item['KinesisStreamsInput'] = {
+                    'ResourceARN': item['kinesis']['resource_arn'],
+                    'RoleARN': item['kinesis']['role_arn'],
+                }
+            elif item['kinesis']['type'] == 'firehose':
+                input_item['KinesisFirehoseInput'] = {
+                    'ResourceARN': item['kinesis']['resource_arn'],
+                    'RoleARN': item['kinesis']['role_arn'],
+                }
 
-        if self.app.module.params['inputs']['schema']['format']['type'] == 'JSON':
-            expected['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
-                'RecordRowPath': self.app.module.params['inputs']['schema']['format']['json_mapping_row_path'],
-            }
-        elif self.app.module.params['inputs']['schema']['format']['type'] == 'CSV':
-            expected['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
-                'RecordRowDelimiter': self.app.module.params['inputs']['schema']['format']['csv_mapping_row_delimiter'],
-                'RecordColumnDelimiter': self.app.module.params['inputs']['schema']['format'][
-                    'csv_mapping_column_delimiter'],
-            }
+            if 'pre_processor' in item:
+                input_item['InputProcessingConfiguration'] = {}
+                input_item['InputProcessingConfiguration']['InputLambdaProcessor'] = {
+                    'ResourceARN': item['pre_processor']['resource_arn'],
+                    'RoleARN': item['pre_processor']['role_arn'],
+                }
 
-        for column in self.app.module.params['inputs']['schema']['columns']:
-            expected['InputSchema']['RecordColumns'].append({
-                'Mapping': column['mapping'],
-                'Name': column['name'],
-                'SqlType': column['type'],
-            })
+            if item['schema']['format']['type'] == 'JSON':
+                input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
+                    'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
+                }
+            elif item['schema']['format']['type'] == 'CSV':
+                input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
+                    'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
+                    'RecordColumnDelimiter': item['schema']['format'][
+                        'csv_mapping_column_delimiter'],
+                }
+
+            for column in item['schema']['columns']:
+                input_item['InputSchema']['RecordColumns'].append({
+                    'Mapping': column['mapping'],
+                    'Name': column['name'],
+                    'SqlType': column['type'],
+                })
+            expected.append(input_item)
 
         return expected
 
@@ -355,7 +359,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             'InputStartingPositionConfiguration': {}
         }
 
-        item['InputStartingPositionConfiguration']['InputStartingPosition'] = self.app.module.params['starting_position']
+        item['InputStartingPositionConfiguration']['InputStartingPosition'] = self.app.module.params[
+            'starting_position']
 
         expected.append(item)
 
