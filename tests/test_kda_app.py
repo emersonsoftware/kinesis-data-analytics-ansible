@@ -123,7 +123,11 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
     def test_process_request_calls_describe_application_and_stores_result_when_invoked(self):
         resp = {
-            'app': 'lol',
+            'ApplicationDetail': {
+                'ApplicationVersionId': 55,
+                'ApplicationCode': 'doYouCare?'
+
+            }
         }
         self.app.client.describe_application = mock.MagicMock(return_value=resp)
 
@@ -233,6 +237,15 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.start_application.assert_called_once_with(ApplicationName='testifyApp',
                                                                   InputConfigurations=self.get_input_start_configuration())
 
+    def test_update_application_gets_called_when_code_changes(self):
+        self.setup_for_update_application(app_code='codeontheserver')
+
+        self.app.process_request()
+
+        self.app.client.update_application.assert_called_once_with(ApplicationName='testifyApp',
+                                                                   CurrentApplicationVersionId=11,
+                                                                   ApplicationUpdate=self.get_expected_app_update_configuration())
+
     def get_expected_input_configuration(self):
         expected = {
             'NamePrefix': self.app.module.params['inputs']['name_prefix'],
@@ -326,6 +339,14 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         return expected
 
+    def get_expected_app_update_configuration(self):
+        expected = {}
+
+        if self.app.module.params['code'] != self.app.current_state['ApplicationDetail']['ApplicationCode']:
+            expected['ApplicationCodeUpdate'] = self.app.module.params['code']
+
+        return expected
+
     def get_input_start_configuration(self):
         expected = []
 
@@ -345,6 +366,19 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.describe_application = mock.MagicMock(side_effect=ClientError(resource_not_found, ''))
         self.app.client.create_application = mock.MagicMock()
         self.app.client.start_application = mock.MagicMock()
+
+    def setup_for_update_application(self, app_code=''):
+        mock_describe_application_response = {
+            'ApplicationDetail': {
+                'ApplicationVersionId': 11,
+
+            }
+        }
+
+        if app_code != '':
+            mock_describe_application_response['ApplicationDetail']['ApplicationCode'] = app_code
+
+        self.app.client.describe_application = mock.MagicMock(return_value=mock_describe_application_response)
 
 
 if __name__ == '__main__':

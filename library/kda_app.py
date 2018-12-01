@@ -26,6 +26,8 @@ class KinesisDataAnalyticsApp:
         if status is 'AppNotFound':
             self.create_new_application()
             self.start_application()
+        elif status is 'AppFound':
+            self.update_application()
 
     def start_application(self):
         self.client.start_application(ApplicationName=self.module.params['name'],
@@ -45,6 +47,11 @@ class KinesisDataAnalyticsApp:
                                            Inputs=[self.get_input_configuration()],
                                            Outputs=self.get_output_configuration(),
                                            ApplicationCode=self.module.params['code'])
+
+    def update_application(self):
+        self.client.update_application(ApplicationName=self.module.params['name'],
+                                       CurrentApplicationVersionId=self.current_state['ApplicationDetail']['ApplicationVersionId'],
+                                       ApplicationUpdate=self.get_app_update_configuration())
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -162,6 +169,14 @@ class KinesisDataAnalyticsApp:
         input_config.append(item)
 
         return input_config
+
+    def get_app_update_configuration(self):
+        update_config = {}
+
+        if self.module.params['code'] != self.current_state['ApplicationDetail']['ApplicationCode']:
+            update_config['ApplicationCodeUpdate'] = self.module.params['code']
+
+        return update_config
 
 
 def main():
