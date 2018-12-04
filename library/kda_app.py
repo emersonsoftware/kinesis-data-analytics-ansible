@@ -44,7 +44,7 @@ class KinesisDataAnalyticsApp:
         else:
             self.client.create_application(ApplicationName=self.module.params['name'],
                                            ApplicationDescription=self.module.params['description'],
-                                           Inputs=[self.get_input_configuration()],
+                                           Inputs=self.get_input_configuration(),
                                            Outputs=self.get_output_configuration(),
                                            ApplicationCode=self.module.params['code'])
 
