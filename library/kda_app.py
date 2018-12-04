@@ -50,7 +50,8 @@ class KinesisDataAnalyticsApp:
 
     def update_application(self):
         self.client.update_application(ApplicationName=self.module.params['name'],
-                                       CurrentApplicationVersionId=self.current_state['ApplicationDetail']['ApplicationVersionId'],
+                                       CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                           'ApplicationVersionId'],
                                        ApplicationUpdate=self.get_app_update_configuration())
 
     def get_current_state(self):
@@ -179,7 +180,144 @@ class KinesisDataAnalyticsApp:
         if self.module.params['code'] != self.current_state['ApplicationDetail']['ApplicationCode']:
             update_config['ApplicationCodeUpdate'] = self.module.params['code']
 
+        if self.is_input_configuration_change():
+            update_config['InputUpdates'] = self.get_input_update_configuration()
+
         return update_config
+
+    def is_input_configuration_change(self):
+        if len(self.module.params['inputs']) != len(self.current_state['ApplicationDetail']['InputDescriptions']):
+            return True
+
+        for input in self.module.params['inputs']:
+            matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
+                                       i['NamePrefix'] == input['name_prefix']]
+            if len(matched_describe_inputs) != 1:
+                return True
+            describe_input = matched_describe_inputs[0]
+
+            if input['schema']['format']['type'] != describe_input['InputSchema']['RecordFormat']['RecordFormatType']:
+                return True
+
+            if input['schema']['format']['type'] == 'JSON':
+                if input['schema']['format']['json_mapping_row_path'] != \
+                        describe_input['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'][
+                            'RecordRowPath']:
+                    return True
+
+            if input['schema']['format']['type'] == 'CSV':
+                if input['schema']['format']['csv_mapping_row_delimiter'] != \
+                        describe_input['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'][
+                            'RecordRowDelimiter']:
+                    return True
+                if input['schema']['format']['csv_mapping_column_delimiter'] != \
+                        describe_input['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'][
+                            'RecordColumnDelimiter']:
+                    return True
+
+            if len(input['schema']['columns']) != len(describe_input['InputSchema']['RecordColumns']):
+                return True
+
+            for col in input['schema']['columns']:
+                matched_describe_cols = [i for i in describe_input['InputSchema']['RecordColumns'] if
+                                         i['Name'] == col['name']]
+                if len(matched_describe_cols) != 1:
+                    return True
+                describe_col = matched_describe_cols[0]
+                if describe_col['SqlType'] != col['type'] or describe_col['Mapping'] != col['mapping']:
+                    return True
+
+            if input['parallelism'] != describe_input['InputParallelism']['Count']:
+                return True
+
+            if input['kinesis']['type'] == 'streams':
+                if 'KinesisStreamsInputDescription' in describe_input:
+                    if input['kinesis']['resource_arn'] != describe_input['KinesisStreamsInputDescription'][
+                        'ResourceARN']:
+                        return True
+                    if input['kinesis']['role_arn'] != describe_input['KinesisStreamsInputDescription']['RoleARN']:
+                        return True
+
+            if input['kinesis']['type'] == 'firehose':
+                if 'KinesisFirehoseInputDescription' in describe_input:
+                    if input['kinesis']['resource_arn'] != describe_input['KinesisFirehoseInputDescription'][
+                        'ResourceARN']:
+                        return True
+                    if input['kinesis']['role_arn'] != describe_input['KinesisFirehoseInputDescription']['RoleARN']:
+                        return True
+
+            if 'pre_processor' in input:
+                if 'InputProcessingConfigurationDescription' not in describe_input:
+                    return True
+                if input['pre_processor']['resource_arn'] != \
+                        describe_input['InputProcessingConfigurationDescription']['InputLambdaProcessorDescription'][
+                            'ResourceARN']:
+                    return True
+                if input['pre_processor']['role_arn'] != \
+                        describe_input['InputProcessingConfigurationDescription']['InputLambdaProcessorDescription'][
+                            'RoleARN']:
+                    return True
+
+        return False
+
+    def get_input_update_configuration(self):
+        expected = []
+        for item in self.module.params['inputs']:
+            matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
+                                       i['NamePrefix'] == item['name_prefix']]
+            input_item = {
+                'InputId': matched_describe_inputs[0]['InputId'],
+                'NamePrefixUpdate': item['name_prefix'],
+                'InputParallelismUpdate': {
+                    'CountUpdate': item['parallelism']
+                },
+                'InputSchemaUpdate': {
+                    'RecordFormatUpdate': {
+                        'RecordFormatType': item['schema']['format']['type'],
+                        'MappingParameters': {}
+                    },
+                    'RecordColumnUpdates': [],
+                }
+            }
+
+            if item['kinesis']['type'] == 'streams':
+                input_item['KinesisStreamsInputUpdate'] = {
+                    'ResourceARNUpdate': item['kinesis']['resource_arn'],
+                    'RoleARNUpdate': item['kinesis']['role_arn'],
+                }
+            elif item['kinesis']['type'] == 'firehose':
+                input_item['KinesisFirehoseInputUpdate'] = {
+                    'ResourceARNUpdate': item['kinesis']['resource_arn'],
+                    'RoleARNUpdate': item['kinesis']['role_arn'],
+                }
+
+            if 'pre_processor' in item:
+                input_item['InputProcessingConfigurationUpdate'] = {}
+                input_item['InputProcessingConfigurationUpdate']['InputLambdaProcessorUpdate'] = {
+                    'ResourceARNUpdate': item['pre_processor']['resource_arn'],
+                    'RoleARNUpdate': item['pre_processor']['role_arn'],
+                }
+
+            if item['schema']['format']['type'] == 'JSON':
+                input_item['InputSchemaUpdate']['RecordFormatUpdate']['MappingParameters']['JSONMappingParameters'] = {
+                    'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
+                }
+            elif item['schema']['format']['type'] == 'CSV':
+                input_item['InputSchemaUpdate']['RecordFormatUpdate']['MappingParameters']['CSVMappingParameters'] = {
+                    'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
+                    'RecordColumnDelimiter': item['schema']['format'][
+                        'csv_mapping_column_delimiter'],
+                }
+
+            for column in item['schema']['columns']:
+                input_item['InputSchemaUpdate']['RecordColumnUpdates'].append({
+                    'Mapping': column['mapping'],
+                    'Name': column['name'],
+                    'SqlType': column['type'],
+                })
+            expected.append(input_item)
+
+        return expected
 
 
 def main():
