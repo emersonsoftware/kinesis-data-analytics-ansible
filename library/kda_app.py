@@ -183,7 +183,51 @@ class KinesisDataAnalyticsApp:
         if self.is_input_configuration_change():
             update_config['InputUpdates'] = self.get_input_update_configuration()
 
+        if self.is_output_configuration_change():
+            update_config['OutputUpdates'] = self.get_output_update_configuration()
+
         return update_config
+
+    def is_output_configuration_change(self):
+        if len(self.module.params['outputs']) != len(
+                self.current_state['ApplicationDetail']['OutputDescriptions']):
+            return True
+
+        for output in self.module.params['outputs']:
+            matched_describe_outputs = [i for i in self.current_state['ApplicationDetail']['OutputDescriptions'] if
+                                        i['Name'] == output['name']]
+            if len(matched_describe_outputs) != 1:
+                return True
+            describe_output = matched_describe_outputs[0]
+
+            if output['type'] == 'streams':
+                if 'KinesisStreamsOutputDescription' not in describe_output:
+                    return True
+                if output['resource_arn'] != describe_output['KinesisStreamsOutputDescription']['ResourceARN']:
+                    return True
+                if output['role_arn'] != describe_output['KinesisStreamsOutputDescription']['RoleARN']:
+                    return True
+
+            if output['type'] == 'firehose':
+                if 'KinesisFirehoseOutputDescription' not in describe_output:
+                    return True
+                if output['resource_arn'] != describe_output['KinesisFirehoseOutputDescription']['ResourceARN']:
+                    return True
+                if output['role_arn'] != describe_output['KinesisFirehoseOutputDescription']['RoleARN']:
+                    return True
+
+            if output['type'] == 'lambda':
+                if 'LambdaOutputDescription' not in describe_output:
+                    return True
+                if output['resource_arn'] != describe_output['LambdaOutputDescription']['ResourceARN']:
+                    return True
+                if output['role_arn'] != describe_output['LambdaOutputDescription']['RoleARN']:
+                    return True
+
+            if output['format_type'] != describe_output['DestinationSchema']['RecordFormatType']:
+                return True
+
+        return False
 
     def is_input_configuration_change(self):
         if len(self.module.params['inputs']) != len(self.current_state['ApplicationDetail']['InputDescriptions']):
@@ -265,6 +309,9 @@ class KinesisDataAnalyticsApp:
         for item in self.module.params['inputs']:
             matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
                                        i['NamePrefix'] == item['name_prefix']]
+            if len(matched_describe_inputs) != 1:
+                continue
+
             input_item = {
                 'InputId': matched_describe_inputs[0]['InputId'],
                 'NamePrefixUpdate': item['name_prefix'],
@@ -316,6 +363,42 @@ class KinesisDataAnalyticsApp:
                     'SqlType': column['type'],
                 })
             expected.append(input_item)
+
+        return expected
+
+    def get_output_update_configuration(self):
+        expected = []
+
+        for item in self.module.params['outputs']:
+            matched_describe_outputs = [i for i in self.current_state['ApplicationDetail']['OutputDescriptions'] if
+                                        i['Name'] == item['name']]
+
+            if len(matched_describe_outputs) != 1:
+                continue
+
+            output = {
+                'OutputId': matched_describe_outputs[0]['OutputId'],
+                'NameUpdate': item['name'],
+                'DestinationSchemaUpdate': {
+                    'RecordFormatType': item['format_type']
+                }
+            }
+            if item['type'] == 'streams':
+                output['KinesisStreamsOutputUpdate'] = {
+                    'ResourceARNUpdate': item['resource_arn'],
+                    'RoleARNUpdate': item['role_arn'],
+                }
+            elif item['type'] == 'firehose':
+                output['KinesisFirehoseOutputUpdate'] = {
+                    'ResourceARNUpdate': item['resource_arn'],
+                    'RoleARNUpdate': item['role_arn'],
+                }
+            elif item['type'] == 'lambda':
+                output['LambdaOutputUpdate'] = {
+                    'ResourceARNUpdate': item['resource_arn'],
+                    'RoleARNUpdate': item['role_arn'],
+                }
+            expected.append(output)
 
         return expected
 

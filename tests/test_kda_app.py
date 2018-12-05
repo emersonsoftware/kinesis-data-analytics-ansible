@@ -126,7 +126,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             'ApplicationDetail': {
                 'ApplicationVersionId': 55,
                 'ApplicationCode': 'doYouCare?',
-                'InputDescriptions': self.get_expected_describe_input_configuration()
+                'InputDescriptions': self.get_expected_describe_input_configuration(),
+                'OutputDescriptions': self.get_expected_describe_output_configuration(),
 
             }
         }
@@ -241,7 +242,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
     def test_update_application_gets_called_when_code_changes(self):
         self.setup_for_update_application(app_code='codeontheserver',
-                                          inputs=self.get_expected_describe_input_configuration())
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration())
 
         self.app.process_request()
 
@@ -301,7 +303,58 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             if schema_change == 1:
                 del describe_input['InputSchema']['RecordColumns'][0]
 
-        self.setup_for_update_application(inputs=describe_inputs)
+        self.setup_for_update_application(inputs=describe_inputs, outputs=self.get_expected_describe_output_configuration())
+
+        self.app.process_request()
+
+        self.app.client.update_application.assert_called_once_with(ApplicationName='testifyApp',
+                                                                   CurrentApplicationVersionId=11,
+                                                                   ApplicationUpdate=self.get_expected_app_update_configuration())
+
+    @data(
+        (1, 0, 0, 0),
+        (0, 1, 0, 0),
+        (0, 0, 1, 0),
+        (0, 0, 0, 1),
+        (0, 1, 0, 1),
+        (1, 0, 0, 1),
+        (1, 1, 0, 1),
+        (1, 1, 1, 1),
+    )
+    @unpack
+    def test_update_application_gets_called_when_output_changes(self, changed_resource, changed_role,
+                                                                changed_format_type, changed_output_type):
+        describe_outputs = self.get_expected_describe_output_configuration()
+
+        for output in describe_outputs:
+            if changed_resource == 1:
+                if 'KinesisStreamsOutputDescription' in output:
+                    output['KinesisStreamsOutputDescription']['ResourceARN'] = 'different:arn'
+                if 'KinesisFirehoseOutputDescription' in output:
+                    output['KinesisFirehoseOutputDescription']['ResourceARN'] = 'different:arn'
+                if 'LambdaOutputDescription' in output:
+                    output['LambdaOutputDescription']['ResourceARN'] = 'different:arn'
+            if changed_role == 1:
+                if 'KinesisStreamsOutputDescription' in output:
+                    output['KinesisStreamsOutputDescription']['RoleARN'] = 'different:arn'
+                if 'KinesisFirehoseOutputDescription' in output:
+                    output['KinesisFirehoseOutputDescription']['RoleARN'] = 'different:arn'
+                if 'LambdaOutputDescription' in output:
+                    output['LambdaOutputDescription']['RoleARN'] = 'different:arn'
+            if changed_format_type == 1:
+                if output['DestinationSchema']['RecordFormatType'] == 'JSON':
+                    output['DestinationSchema']['RecordFormatType'] = 'CSV'
+                elif output['DestinationSchema']['RecordFormatType'] == 'CSV':
+                    output['DestinationSchema']['RecordFormatType'] = 'JSON'
+            if changed_output_type == 1:
+                if 'KinesisStreamsOutputDescription' in output:
+                    output['KinesisFirehoseOutputDescription'] = output.pop('KinesisStreamsOutputDescription')
+                if 'KinesisFirehoseOutputDescription' in output:
+                    output['KinesisStreamsOutputDescription'] = output.pop('KinesisFirehoseOutputDescription')
+                if 'LambdaOutputDescription' in output:
+                    output['KinesisFirehoseOutputDescription'] = output.pop('LambdaOutputDescription')
+
+        self.setup_for_update_application(inputs=self.get_expected_describe_input_configuration(), outputs=describe_outputs)
 
         self.app.process_request()
 
@@ -370,6 +423,9 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         for item in self.app.module.params['inputs']:
             matched_describe_inputs = [i for i in self.app.current_state['ApplicationDetail']['InputDescriptions'] if
                                        i['NamePrefix'] == item['name_prefix']]
+            if len(matched_describe_inputs) != 1:
+                continue
+
             input_item = {
                 'InputId': matched_describe_inputs[0]['InputId'],
                 'NamePrefixUpdate': item['name_prefix'],
@@ -421,6 +477,73 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'SqlType': column['type'],
                 })
             expected.append(input_item)
+
+        return expected
+
+    def get_expected_output_update_configuration(self):
+        expected = []
+
+        for item in self.app.module.params['outputs']:
+            matched_describe_outputs = [i for i in self.app.current_state['ApplicationDetail']['OutputDescriptions'] if
+                                        i['Name'] == item['name']]
+
+            if len(matched_describe_outputs) != 1:
+                continue
+
+            output = {
+                'OutputId': matched_describe_outputs[0]['OutputId'],
+                'NameUpdate': item['name'],
+                'DestinationSchemaUpdate': {
+                    'RecordFormatType': item['format_type']
+                }
+            }
+            if item['type'] == 'streams':
+                output['KinesisStreamsOutputUpdate'] = {
+                    'ResourceARNUpdate': item['resource_arn'],
+                    'RoleARNUpdate': item['role_arn'],
+                }
+            elif item['type'] == 'firehose':
+                output['KinesisFirehoseOutputUpdate'] = {
+                    'ResourceARNUpdate': item['resource_arn'],
+                    'RoleARNUpdate': item['role_arn'],
+                }
+            elif item['type'] == 'lambda':
+                output['LambdaOutputUpdate'] = {
+                    'ResourceARNUpdate': item['resource_arn'],
+                    'RoleARNUpdate': item['role_arn'],
+                }
+            expected.append(output)
+
+        return expected
+
+    def get_expected_describe_output_configuration(self):
+        expected = []
+        outputId = 0
+        for item in self.app.module.params['outputs']:
+            outputId += 1
+            output = {
+                'OutputId': str(outputId),
+                'Name': item['name'],
+                'DestinationSchema': {
+                    'RecordFormatType': item['format_type']
+                }
+            }
+            if item['type'] == 'streams':
+                output['KinesisStreamsOutputDescription'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            elif item['type'] == 'firehose':
+                output['KinesisFirehoseOutputDescription'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            elif item['type'] == 'lambda':
+                output['LambdaOutputDescription'] = {
+                    'ResourceARN': item['resource_arn'],
+                    'RoleARN': item['role_arn'],
+                }
+            expected.append(output)
 
         return expected
 
@@ -532,7 +655,51 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         if self.is_input_configuration_changed():
             expected['InputUpdates'] = self.get_expected_input_update_configuration()
 
+        if self.is_output_configuration_changed():
+            expected['OutputUpdates'] = self.get_expected_output_update_configuration()
+
         return expected
+
+    def is_output_configuration_changed(self):
+        if len(self.app.module.params['outputs']) != len(
+                self.app.current_state['ApplicationDetail']['OutputDescriptions']):
+            return True
+
+        for output in self.app.module.params['outputs']:
+            matched_describe_outputs = [i for i in self.app.current_state['ApplicationDetail']['OutputDescriptions'] if
+                                       i['Name'] == output['name']]
+            if len(matched_describe_outputs) != 1:
+                return True
+            describe_output = matched_describe_outputs[0]
+
+            if output['type'] == 'streams':
+                if 'KinesisStreamsOutputDescription' not in describe_output:
+                    return True
+                if output['resource_arn'] != describe_output['KinesisStreamsOutputDescription']['ResourceARN']:
+                    return True
+                if output['role_arn'] != describe_output['KinesisStreamsOutputDescription']['RoleARN']:
+                    return True
+
+            if output['type'] == 'firehose':
+                if 'KinesisFirehoseOutputDescription' not in describe_output:
+                    return True
+                if output['resource_arn'] != describe_output['KinesisFirehoseOutputDescription']['ResourceARN']:
+                    return True
+                if output['role_arn'] != describe_output['KinesisFirehoseOutputDescription']['RoleARN']:
+                    return True
+
+            if output['type'] == 'lambda':
+                if 'LambdaOutputDescription' not in describe_output:
+                    return True
+                if output['resource_arn'] != describe_output['LambdaOutputDescription']['ResourceARN']:
+                    return True
+                if output['role_arn'] != describe_output['LambdaOutputDescription']['RoleARN']:
+                    return True
+
+            if output['format_type'] != describe_output['DestinationSchema']['RecordFormatType']:
+                return True
+
+        return False
 
     def is_input_configuration_changed(self):
         if len(self.app.module.params['inputs']) != len(
@@ -631,7 +798,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.create_application = mock.MagicMock()
         self.app.client.start_application = mock.MagicMock()
 
-    def setup_for_update_application(self, app_code='', inputs=None):
+    def setup_for_update_application(self, app_code='', inputs=None, outputs=None):
         mock_describe_application_response = {
             'ApplicationDetail': {
                 'ApplicationVersionId': 11,
@@ -645,6 +812,9 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         if inputs is not None:
             mock_describe_application_response['ApplicationDetail']['InputDescriptions'] = inputs
+
+        if outputs is not None:
+            mock_describe_application_response['ApplicationDetail']['OutputDescriptions'] = outputs
 
         self.app.client.describe_application = mock.MagicMock(return_value=mock_describe_application_response)
 
