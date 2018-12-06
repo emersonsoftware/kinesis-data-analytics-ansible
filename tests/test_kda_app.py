@@ -128,6 +128,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 'ApplicationCode': 'doYouCare?',
                 'InputDescriptions': self.get_expected_describe_input_configuration(),
                 'OutputDescriptions': self.get_expected_describe_output_configuration(),
+                'CloudWatchLoggingOptionDescriptions': self.get_expected_describe_logs_configuration(),
 
             }
         }
@@ -243,7 +244,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
     def test_update_application_gets_called_when_code_changes(self):
         self.setup_for_update_application(app_code='codeontheserver',
                                           inputs=self.get_expected_describe_input_configuration(),
-                                          outputs=self.get_expected_describe_output_configuration())
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
 
         self.app.process_request()
 
@@ -303,7 +305,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             if schema_change == 1:
                 del describe_input['InputSchema']['RecordColumns'][0]
 
-        self.setup_for_update_application(inputs=describe_inputs, outputs=self.get_expected_describe_output_configuration())
+        self.setup_for_update_application(inputs=describe_inputs, outputs=self.get_expected_describe_output_configuration(), logs=self.get_expected_describe_logs_configuration())
 
         self.app.process_request()
 
@@ -354,7 +356,21 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 if 'LambdaOutputDescription' in output:
                     output['KinesisFirehoseOutputDescription'] = output.pop('LambdaOutputDescription')
 
-        self.setup_for_update_application(inputs=self.get_expected_describe_input_configuration(), outputs=describe_outputs)
+        self.setup_for_update_application(inputs=self.get_expected_describe_input_configuration(), outputs=describe_outputs, logs=self.get_expected_describe_logs_configuration())
+
+        self.app.process_request()
+
+        self.app.client.update_application.assert_called_once_with(ApplicationName='testifyApp',
+                                                                   CurrentApplicationVersionId=11,
+                                                                   ApplicationUpdate=self.get_expected_app_update_configuration())
+
+    def test_update_application_gets_called_when_logs_changes(self):
+        describe_logs = self.get_expected_describe_logs_configuration()
+
+        for log in describe_logs:
+            log['RoleARN'] = 'diffrent::arn'
+
+        self.setup_for_update_application(inputs=self.get_expected_describe_input_configuration(), outputs=self.get_expected_describe_output_configuration(), logs=describe_logs)
 
         self.app.process_request()
 
@@ -516,6 +532,25 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         return expected
 
+    def get_expected_log_update_configuration(self):
+        expected = []
+
+        for item in self.app.module.params['logs']:
+            matched_describe_logs = [i for i in self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
+                                        i['LogStreamARN'] == item['stream_arn']]
+
+            if len(matched_describe_logs) != 1:
+                continue
+
+            log = {
+                'CloudWatchLoggingOptionId': matched_describe_logs[0]['CloudWatchLoggingOptionId'],
+                'LogStreamARNUpdate': item['stream_arn'],
+                'RoleARNUpdate': item['role_arn']
+            }
+            expected.append(log)
+
+        return expected
+
     def get_expected_describe_output_configuration(self):
         expected = []
         outputId = 0
@@ -544,6 +579,20 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'RoleARN': item['role_arn'],
                 }
             expected.append(output)
+
+        return expected
+
+    def get_expected_describe_logs_configuration(self):
+        expected = []
+        logId = 0
+        for item in self.app.module.params['logs']:
+            logId += 1
+            log = {
+                'CloudWatchLoggingOptionId': str(logId),
+                'LogStreamARN': item['stream_arn'],
+                'RoleARN': item['role_arn']
+            }
+            expected.append(log)
 
         return expected
 
@@ -658,6 +707,9 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         if self.is_output_configuration_changed():
             expected['OutputUpdates'] = self.get_expected_output_update_configuration()
 
+        if self.is_log_configuration_changed():
+            expected['CloudWatchLoggingOptionUpdates'] = self.get_expected_log_update_configuration()
+
         return expected
 
     def is_output_configuration_changed(self):
@@ -697,6 +749,23 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     return True
 
             if output['format_type'] != describe_output['DestinationSchema']['RecordFormatType']:
+                return True
+
+        return False
+
+    def is_log_configuration_changed(self):
+        if len(self.app.module.params['logs']) != len(
+                self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']):
+            return True
+
+        for log in self.app.module.params['logs']:
+            matched_describe_logs = [i for i in self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
+                                        i['LogStreamARN'] == log['stream_arn']]
+            if len(matched_describe_logs) != 1:
+                return True
+            describe_log = matched_describe_logs[0]
+
+            if log['role_arn'] != describe_log['RoleARN']:
                 return True
 
         return False
@@ -798,7 +867,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.create_application = mock.MagicMock()
         self.app.client.start_application = mock.MagicMock()
 
-    def setup_for_update_application(self, app_code='', inputs=None, outputs=None):
+    def setup_for_update_application(self, app_code='', inputs=None, outputs=None, logs=None):
         mock_describe_application_response = {
             'ApplicationDetail': {
                 'ApplicationVersionId': 11,
@@ -815,6 +884,9 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         if outputs is not None:
             mock_describe_application_response['ApplicationDetail']['OutputDescriptions'] = outputs
+
+        if logs is not None:
+            mock_describe_application_response['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] = logs
 
         self.app.client.describe_application = mock.MagicMock(return_value=mock_describe_application_response)
 

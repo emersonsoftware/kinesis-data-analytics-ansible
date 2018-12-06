@@ -186,6 +186,9 @@ class KinesisDataAnalyticsApp:
         if self.is_output_configuration_change():
             update_config['OutputUpdates'] = self.get_output_update_configuration()
 
+        if self.is_log_configuration_changed():
+            update_config['CloudWatchLoggingOptionUpdates'] = self.get_log_update_configuration()
+
         return update_config
 
     def is_output_configuration_change(self):
@@ -304,6 +307,23 @@ class KinesisDataAnalyticsApp:
 
         return False
 
+    def is_log_configuration_changed(self):
+        if len(self.module.params['logs']) != len(
+                self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']):
+            return True
+
+        for log in self.module.params['logs']:
+            matched_describe_logs = [i for i in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
+                                     i['LogStreamARN'] == log['stream_arn']]
+            if len(matched_describe_logs) != 1:
+                return True
+            describe_log = matched_describe_logs[0]
+
+            if log['role_arn'] != describe_log['RoleARN']:
+                return True
+
+        return False
+
     def get_input_update_configuration(self):
         expected = []
         for item in self.module.params['inputs']:
@@ -399,6 +419,25 @@ class KinesisDataAnalyticsApp:
                     'RoleARNUpdate': item['role_arn'],
                 }
             expected.append(output)
+
+        return expected
+
+    def get_log_update_configuration(self):
+        expected = []
+
+        for item in self.module.params['logs']:
+            matched_describe_logs = [i for i in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
+                                     i['LogStreamARN'] == item['stream_arn']]
+
+            if len(matched_describe_logs) != 1:
+                continue
+
+            log = {
+                'CloudWatchLoggingOptionId': matched_describe_logs[0]['CloudWatchLoggingOptionId'],
+                'LogStreamARNUpdate': item['stream_arn'],
+                'RoleARNUpdate': item['role_arn']
+            }
+            expected.append(log)
 
         return expected
 
