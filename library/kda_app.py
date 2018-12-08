@@ -69,6 +69,16 @@ class KinesisDataAnalyticsApp:
                                                       'ApplicationVersionId'],
                                                   Input=self.get_single_input_configuration(item))
 
+        for item in self.current_state['ApplicationDetail']['InputDescriptions']:
+            matched_desired_inputs = [i for i in self.module.params['inputs'] if
+                                      i['name_prefix'] == item['NamePrefix']]
+            if len(matched_desired_inputs) <= 0:
+                self.client.delete_application_input_processing_configuration(
+                    ApplicationName=self.module.params['name'],
+                    CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                        'ApplicationVersionId'],
+                    InputId=item['InputId'])
+
     def get_current_state(self):
         from botocore.exceptions import ClientError
         try:

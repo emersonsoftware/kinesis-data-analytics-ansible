@@ -435,7 +435,24 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.client.add_application_input.assert_called_once_with(ApplicationName='testifyApp',
                                                                       CurrentApplicationVersionId=11,
-                                                                      Input=self.get_single_input_configuration(new_input))
+                                                                      Input=self.get_single_input_configuration(
+                                                                          new_input))
+
+    def test_delete_application_input_processing_configuration_gets_called_when_undesired_input_detected(self):
+        self.app.module.params['inputs'][0]['name_prefix'] = 'undesiredInputStream'
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        self.app.module.params['inputs'][0]['name_prefix'] = 'newInputStream'
+
+        self.app.process_request()
+
+        expected_input_id = self.app.current_state['ApplicationDetail']['InputDescriptions'][0]['InputId']
+        self.app.client.delete_application_input_processing_configuration.assert_called_once_with(
+            ApplicationName='testifyApp',
+            CurrentApplicationVersionId=11, InputId=expected_input_id)
 
     def get_expected_input_configuration(self):
         expected = []
