@@ -305,7 +305,9 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             if schema_change == 1:
                 del describe_input['InputSchema']['RecordColumns'][0]
 
-        self.setup_for_update_application(inputs=describe_inputs, outputs=self.get_expected_describe_output_configuration(), logs=self.get_expected_describe_logs_configuration())
+        self.setup_for_update_application(inputs=describe_inputs,
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
 
         self.app.process_request()
 
@@ -356,7 +358,9 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 if 'LambdaOutputDescription' in output:
                     output['KinesisFirehoseOutputDescription'] = output.pop('LambdaOutputDescription')
 
-        self.setup_for_update_application(inputs=self.get_expected_describe_input_configuration(), outputs=describe_outputs, logs=self.get_expected_describe_logs_configuration())
+        self.setup_for_update_application(inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=describe_outputs,
+                                          logs=self.get_expected_describe_logs_configuration())
 
         self.app.process_request()
 
@@ -370,13 +374,25 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         for log in describe_logs:
             log['RoleARN'] = 'diffrent::arn'
 
-        self.setup_for_update_application(inputs=self.get_expected_describe_input_configuration(), outputs=self.get_expected_describe_output_configuration(), logs=describe_logs)
+        self.setup_for_update_application(inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(), logs=describe_logs)
 
         self.app.process_request()
 
         self.app.client.update_application.assert_called_once_with(ApplicationName='testifyApp',
                                                                    CurrentApplicationVersionId=11,
                                                                    ApplicationUpdate=self.get_expected_app_update_configuration())
+
+    def test_update_application_not_called_when_updatable_state_do_not_change(self):
+
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        self.app.process_request()
+
+        self.app.client.update_application.assert_not_called()
 
     def get_expected_input_configuration(self):
         expected = []
@@ -536,8 +552,10 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         expected = []
 
         for item in self.app.module.params['logs']:
-            matched_describe_logs = [i for i in self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
-                                        i['LogStreamARN'] == item['stream_arn']]
+            matched_describe_logs = [i for i in
+                                     self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']
+                                     if
+                                     i['LogStreamARN'] == item['stream_arn']]
 
             if len(matched_describe_logs) != 1:
                 continue
@@ -720,7 +738,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         for output in self.app.module.params['outputs']:
             matched_describe_outputs = [i for i in self.app.current_state['ApplicationDetail']['OutputDescriptions'] if
-                                       i['Name'] == output['name']]
+                                        i['Name'] == output['name']]
             if len(matched_describe_outputs) != 1:
                 return True
             describe_output = matched_describe_outputs[0]
@@ -763,8 +781,10 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             return True
 
         for log in self.app.module.params['logs']:
-            matched_describe_logs = [i for i in self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
-                                        i['LogStreamARN'] == log['stream_arn']]
+            matched_describe_logs = [i for i in
+                                     self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']
+                                     if
+                                     i['LogStreamARN'] == log['stream_arn']]
             if len(matched_describe_logs) != 1:
                 return True
             describe_log = matched_describe_logs[0]

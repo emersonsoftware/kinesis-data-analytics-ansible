@@ -27,7 +27,8 @@ class KinesisDataAnalyticsApp:
             self.create_new_application()
             self.start_application()
         elif status is 'AppFound':
-            self.update_application()
+            if self.is_app_updatable_state_changed():
+                self.update_application()
 
     def start_application(self):
         self.client.start_application(ApplicationName=self.module.params['name'],
@@ -191,6 +192,10 @@ class KinesisDataAnalyticsApp:
 
         return update_config
 
+    def is_app_updatable_state_changed(self):
+        return self.module.params['code'] != self.current_state['ApplicationDetail'][
+            'ApplicationCode'] or self.is_input_configuration_change() or self.is_output_configuration_change() or self.is_log_configuration_changed()
+
     def is_output_configuration_change(self):
         if len(self.module.params['outputs']) != len(
                 self.current_state['ApplicationDetail']['OutputDescriptions']):
@@ -315,7 +320,8 @@ class KinesisDataAnalyticsApp:
             return True
 
         for log in self.module.params['logs']:
-            matched_describe_logs = [i for i in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
+            matched_describe_logs = [i for i in
+                                     self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
                                      i['LogStreamARN'] == log['stream_arn']]
             if len(matched_describe_logs) != 1:
                 return True
@@ -428,7 +434,8 @@ class KinesisDataAnalyticsApp:
         expected = []
 
         for item in self.module.params['logs']:
-            matched_describe_logs = [i for i in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
+            matched_describe_logs = [i for i in
+                                     self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
                                      i['LogStreamARN'] == item['stream_arn']]
 
             if len(matched_describe_logs) != 1:
