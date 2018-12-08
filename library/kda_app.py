@@ -29,6 +29,7 @@ class KinesisDataAnalyticsApp:
         elif status is 'AppFound':
             if self.is_app_updatable_state_changed():
                 self.update_application()
+            self.patch_application()
 
     def start_application(self):
         self.client.start_application(ApplicationName=self.module.params['name'],
@@ -55,6 +56,19 @@ class KinesisDataAnalyticsApp:
                                            'ApplicationVersionId'],
                                        ApplicationUpdate=self.get_app_update_configuration())
 
+    def patch_application(self):
+        self.patch_inputs()
+
+    def patch_inputs(self):
+        for item in self.module.params['inputs']:
+            matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
+                                       i['NamePrefix'] == item['name_prefix']]
+            if len(matched_describe_inputs) <= 0:
+                self.client.add_application_input(ApplicationName=self.module.params['name'],
+                                                  CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                                      'ApplicationVersionId'],
+                                                  Input=self.get_single_input_configuration(item))
+
     def get_current_state(self):
         from botocore.exceptions import ClientError
         try:
@@ -69,58 +83,61 @@ class KinesisDataAnalyticsApp:
     def get_input_configuration(self):
         inputs = []
         for item in self.module.params['inputs']:
-            input_item = {
-                'NamePrefix': item['name_prefix'],
-                'InputParallelism': {
-                    'Count': item['parallelism']
-                },
-                'InputSchema': {
-                    'RecordFormat': {
-                        'RecordFormatType': item['schema']['format']['type'],
-                        'MappingParameters': {}
-                    },
-                    'RecordColumns': [],
-                }
-            }
-
-            if item['kinesis']['type'] == 'streams':
-                input_item['KinesisStreamsInput'] = {
-                    'ResourceARN': item['kinesis']['resource_arn'],
-                    'RoleARN': item['kinesis']['role_arn'],
-                }
-            elif item['kinesis']['type'] == 'firehose':
-                input_item['KinesisFirehoseInput'] = {
-                    'ResourceARN': item['kinesis']['resource_arn'],
-                    'RoleARN': item['kinesis']['role_arn'],
-                }
-
-            if 'pre_processor' in item:
-                input_item['InputProcessingConfiguration'] = {}
-                input_item['InputProcessingConfiguration']['InputLambdaProcessor'] = {
-                    'ResourceARN': item['pre_processor']['resource_arn'],
-                    'RoleARN': item['pre_processor']['role_arn'],
-                }
-
-            if item['schema']['format']['type'] == 'JSON':
-                input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
-                    'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
-                }
-            elif item['schema']['format']['type'] == 'CSV':
-                input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
-                    'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
-                    'RecordColumnDelimiter': item['schema']['format'][
-                        'csv_mapping_column_delimiter'],
-                }
-
-            for column in item['schema']['columns']:
-                input_item['InputSchema']['RecordColumns'].append({
-                    'Mapping': column['mapping'],
-                    'Name': column['name'],
-                    'SqlType': column['type'],
-                })
-            inputs.append(input_item)
+            inputs.append(self.get_single_input_configuration(item))
 
         return inputs
+
+    def get_single_input_configuration(self, item):
+        input_item = {
+            'NamePrefix': item['name_prefix'],
+            'InputParallelism': {
+                'Count': item['parallelism']
+            },
+            'InputSchema': {
+                'RecordFormat': {
+                    'RecordFormatType': item['schema']['format']['type'],
+                    'MappingParameters': {}
+                },
+                'RecordColumns': [],
+            }
+        }
+
+        if item['kinesis']['type'] == 'streams':
+            input_item['KinesisStreamsInput'] = {
+                'ResourceARN': item['kinesis']['resource_arn'],
+                'RoleARN': item['kinesis']['role_arn'],
+            }
+        elif item['kinesis']['type'] == 'firehose':
+            input_item['KinesisFirehoseInput'] = {
+                'ResourceARN': item['kinesis']['resource_arn'],
+                'RoleARN': item['kinesis']['role_arn'],
+            }
+
+        if 'pre_processor' in item:
+            input_item['InputProcessingConfiguration'] = {}
+            input_item['InputProcessingConfiguration']['InputLambdaProcessor'] = {
+                'ResourceARN': item['pre_processor']['resource_arn'],
+                'RoleARN': item['pre_processor']['role_arn'],
+            }
+
+        if item['schema']['format']['type'] == 'JSON':
+            input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
+                'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
+            }
+        elif item['schema']['format']['type'] == 'CSV':
+            input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
+                'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
+                'RecordColumnDelimiter': item['schema']['format'][
+                    'csv_mapping_column_delimiter'],
+            }
+
+        for column in item['schema']['columns']:
+            input_item['InputSchema']['RecordColumns'].append({
+                'Mapping': column['mapping'],
+                'Name': column['name'],
+                'SqlType': column['type'],
+            })
+        return input_item
 
     def get_output_configuration(self):
         outputs = []

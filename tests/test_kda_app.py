@@ -394,61 +394,106 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.client.update_application.assert_not_called()
 
-    def get_expected_input_configuration(self):
-        expected = []
-        for item in self.app.module.params['inputs']:
-            input_item = {
-                'NamePrefix': item['name_prefix'],
-                'InputParallelism': {
-                    'Count': item['parallelism']
-                },
-                'InputSchema': {
-                    'RecordFormat': {
-                        'RecordFormatType': item['schema']['format']['type'],
-                        'MappingParameters': {}
+    def test_add_application_input_gets_called_when_new_input_detected(self):
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        new_input = {
+            'name_prefix': 'newInputMAnnn',
+            'parallelism': 1,
+            'kinesis': {
+                'type': 'streams',
+                'resource_arn': 'newinput::kindaa::arn',
+                'role_arn': 'newinput::kindaa::arn'
+            },
+            'schema': {
+                'columns': [
+                    {
+                        'name': 'sensor',
+                        'type': 'VARCHAR(1)',
+                        'mapping': '$.sensor_id',
                     },
-                    'RecordColumns': [],
+                    {
+                        'name': 'temp',
+                        'type': 'NUMERIC',
+                        'mapping': '$.temp',
+                    },
+                ],
+                'format': {
+                    'type': 'JSON',
+                    'json_mapping_row_path': '$',
                 }
             }
 
-            if item['kinesis']['type'] == 'streams':
-                input_item['KinesisStreamsInput'] = {
-                    'ResourceARN': item['kinesis']['resource_arn'],
-                    'RoleARN': item['kinesis']['role_arn'],
-                }
-            elif item['kinesis']['type'] == 'firehose':
-                input_item['KinesisFirehoseInput'] = {
-                    'ResourceARN': item['kinesis']['resource_arn'],
-                    'RoleARN': item['kinesis']['role_arn'],
-                }
+        }
 
-            if 'pre_processor' in item:
-                input_item['InputProcessingConfiguration'] = {}
-                input_item['InputProcessingConfiguration']['InputLambdaProcessor'] = {
-                    'ResourceARN': item['pre_processor']['resource_arn'],
-                    'RoleARN': item['pre_processor']['role_arn'],
-                }
+        self.app.module.params['inputs'].append(new_input)
 
-            if item['schema']['format']['type'] == 'JSON':
-                input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
-                    'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
-                }
-            elif item['schema']['format']['type'] == 'CSV':
-                input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
-                    'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
-                    'RecordColumnDelimiter': item['schema']['format'][
-                        'csv_mapping_column_delimiter'],
-                }
+        self.app.process_request()
 
-            for column in item['schema']['columns']:
-                input_item['InputSchema']['RecordColumns'].append({
-                    'Mapping': column['mapping'],
-                    'Name': column['name'],
-                    'SqlType': column['type'],
-                })
-            expected.append(input_item)
+        self.app.client.add_application_input.assert_called_once_with(ApplicationName='testifyApp',
+                                                                      CurrentApplicationVersionId=11,
+                                                                      Input=self.get_single_input_configuration(new_input))
 
+    def get_expected_input_configuration(self):
+        expected = []
+        for item in self.app.module.params['inputs']:
+            expected.append(self.get_single_input_configuration(item))
         return expected
+
+    def get_single_input_configuration(self, item):
+        input_item = {
+            'NamePrefix': item['name_prefix'],
+            'InputParallelism': {
+                'Count': item['parallelism']
+            },
+            'InputSchema': {
+                'RecordFormat': {
+                    'RecordFormatType': item['schema']['format']['type'],
+                    'MappingParameters': {}
+                },
+                'RecordColumns': [],
+            }
+        }
+
+        if item['kinesis']['type'] == 'streams':
+            input_item['KinesisStreamsInput'] = {
+                'ResourceARN': item['kinesis']['resource_arn'],
+                'RoleARN': item['kinesis']['role_arn'],
+            }
+        elif item['kinesis']['type'] == 'firehose':
+            input_item['KinesisFirehoseInput'] = {
+                'ResourceARN': item['kinesis']['resource_arn'],
+                'RoleARN': item['kinesis']['role_arn'],
+            }
+
+        if 'pre_processor' in item:
+            input_item['InputProcessingConfiguration'] = {}
+            input_item['InputProcessingConfiguration']['InputLambdaProcessor'] = {
+                'ResourceARN': item['pre_processor']['resource_arn'],
+                'RoleARN': item['pre_processor']['role_arn'],
+            }
+
+        if item['schema']['format']['type'] == 'JSON':
+            input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
+                'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
+            }
+        elif item['schema']['format']['type'] == 'CSV':
+            input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
+                'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
+                'RecordColumnDelimiter': item['schema']['format'][
+                    'csv_mapping_column_delimiter'],
+            }
+
+        for column in item['schema']['columns']:
+            input_item['InputSchema']['RecordColumns'].append({
+                'Mapping': column['mapping'],
+                'Name': column['name'],
+                'SqlType': column['type'],
+            })
+        return input_item
 
     def get_expected_input_update_configuration(self):
         expected = []
