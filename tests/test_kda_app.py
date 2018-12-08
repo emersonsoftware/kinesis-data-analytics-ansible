@@ -454,6 +454,42 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             ApplicationName='testifyApp',
             CurrentApplicationVersionId=11, InputId=expected_input_id)
 
+    def test_add_application_output_gets_called_when_new_output_detected(self):
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+        new_output = {
+            'name': 'newOutPut',
+            'type': 'streams',
+            'resource_arn': 'some::newop::arn',
+            'role_arn': 'some::newop::arn',
+            'format_type': 'JSON',
+        }
+        self.app.module.params['outputs'].append(new_output)
+
+        self.app.process_request()
+
+        self.app.client.add_application_output.assert_called_once_with(
+            ApplicationName='testifyApp',
+            CurrentApplicationVersionId=11, Output=self.get_single_output_configuration(new_output))
+
+    def test_delete_application_output_gets_called_when_undesired_output_detected(self):
+        self.app.module.params['outputs'][0]['name'] = 'undesiredOutputStream'
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        self.app.module.params['outputs'][0]['name'] = 'newOutputStream'
+
+        self.app.process_request()
+
+        expected_output_id = self.app.current_state['ApplicationDetail']['OutputDescriptions'][0]['OutputId']
+        self.app.client.delete_application_output.assert_called_once_with(
+            ApplicationName='testifyApp',
+            CurrentApplicationVersionId=11, OutputId=expected_output_id)
+
     def get_expected_input_configuration(self):
         expected = []
         for item in self.app.module.params['inputs']:
@@ -740,30 +776,34 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         expected = []
 
         for item in self.app.module.params['outputs']:
-            output = {
-                'Name': item['name'],
-                'DestinationSchema': {
-                    'RecordFormatType': item['format_type']
-                }
-            }
-            if item['type'] == 'streams':
-                output['KinesisStreamsOutput'] = {
-                    'ResourceARN': item['resource_arn'],
-                    'RoleARN': item['role_arn'],
-                }
-            elif item['type'] == 'firehose':
-                output['KinesisFirehoseOutput'] = {
-                    'ResourceARN': item['resource_arn'],
-                    'RoleARN': item['role_arn'],
-                }
-            elif item['type'] == 'lambda':
-                output['LambdaOutput'] = {
-                    'ResourceARN': item['resource_arn'],
-                    'RoleARN': item['role_arn'],
-                }
-            expected.append(output)
+            expected.append(self.get_single_output_configuration(item))
 
         return expected
+
+    def get_single_output_configuration(self, item):
+        output = {
+            'Name': item['name'],
+            'DestinationSchema': {
+                'RecordFormatType': item['format_type']
+            }
+        }
+        if item['type'] == 'streams':
+            output['KinesisStreamsOutput'] = {
+                'ResourceARN': item['resource_arn'],
+                'RoleARN': item['role_arn'],
+            }
+        elif item['type'] == 'firehose':
+            output['KinesisFirehoseOutput'] = {
+                'ResourceARN': item['resource_arn'],
+                'RoleARN': item['role_arn'],
+            }
+        elif item['type'] == 'lambda':
+            output['LambdaOutput'] = {
+                'ResourceARN': item['resource_arn'],
+                'RoleARN': item['role_arn'],
+            }
+
+        return  output
 
     def get_expected_log_configuration(self):
         expected = []

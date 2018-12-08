@@ -59,6 +59,8 @@ class KinesisDataAnalyticsApp:
     def patch_application(self):
         self.patch_inputs()
 
+        self.patch_outputs()
+
     def patch_inputs(self):
         for item in self.module.params['inputs']:
             matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
@@ -78,6 +80,26 @@ class KinesisDataAnalyticsApp:
                     CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                         'ApplicationVersionId'],
                     InputId=item['InputId'])
+
+    def patch_outputs(self):
+        for item in self.module.params['outputs']:
+            matched_describe_outputs = [i for i in self.current_state['ApplicationDetail']['OutputDescriptions'] if
+                                        i['Name'] == item['name']]
+            if len(matched_describe_outputs) <= 0:
+                self.client.add_application_output(ApplicationName=self.module.params['name'],
+                                                   CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                                       'ApplicationVersionId'],
+                                                   Output=self.get_single_output_configuration(item))
+
+        for item in self.current_state['ApplicationDetail']['OutputDescriptions']:
+            matched_desired_outputs = [i for i in self.module.params['outputs'] if
+                                      i['name'] == item['Name']]
+            if len(matched_desired_outputs) <= 0:
+                self.client.delete_application_output(
+                    ApplicationName=self.module.params['name'],
+                    CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                        'ApplicationVersionId'],
+                    OutputId=item['OutputId'])
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -153,30 +175,34 @@ class KinesisDataAnalyticsApp:
         outputs = []
 
         for item in self.module.params['outputs']:
-            output = {
-                'Name': item['name'],
-                'DestinationSchema': {
-                    'RecordFormatType': item['format_type']
-                }
-            }
-            if item['type'] == 'streams':
-                output['KinesisStreamsOutput'] = {
-                    'ResourceARN': item['resource_arn'],
-                    'RoleARN': item['role_arn'],
-                }
-            elif item['type'] == 'firehose':
-                output['KinesisFirehoseOutput'] = {
-                    'ResourceARN': item['resource_arn'],
-                    'RoleARN': item['role_arn'],
-                }
-            elif item['type'] == 'lambda':
-                output['LambdaOutput'] = {
-                    'ResourceARN': item['resource_arn'],
-                    'RoleARN': item['role_arn'],
-                }
-            outputs.append(output)
+            outputs.append(self.get_single_output_configuration(item))
 
         return outputs
+
+    def get_single_output_configuration(self, item):
+        output = {
+            'Name': item['name'],
+            'DestinationSchema': {
+                'RecordFormatType': item['format_type']
+            }
+        }
+        if item['type'] == 'streams':
+            output['KinesisStreamsOutput'] = {
+                'ResourceARN': item['resource_arn'],
+                'RoleARN': item['role_arn'],
+            }
+        elif item['type'] == 'firehose':
+            output['KinesisFirehoseOutput'] = {
+                'ResourceARN': item['resource_arn'],
+                'RoleARN': item['role_arn'],
+            }
+        elif item['type'] == 'lambda':
+            output['LambdaOutput'] = {
+                'ResourceARN': item['resource_arn'],
+                'RoleARN': item['role_arn'],
+            }
+
+        return output
 
     def get_log_configuration(self):
         logs = []
