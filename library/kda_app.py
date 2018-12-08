@@ -308,6 +308,8 @@ class KinesisDataAnalyticsApp:
         return False
 
     def is_log_configuration_changed(self):
+        if 'logs' not in self.module.params:
+            return False
         if len(self.module.params['logs']) != len(
                 self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']):
             return True

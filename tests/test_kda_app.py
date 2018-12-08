@@ -584,15 +584,16 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
     def get_expected_describe_logs_configuration(self):
         expected = []
-        logId = 0
-        for item in self.app.module.params['logs']:
-            logId += 1
-            log = {
-                'CloudWatchLoggingOptionId': str(logId),
-                'LogStreamARN': item['stream_arn'],
-                'RoleARN': item['role_arn']
-            }
-            expected.append(log)
+        if 'logs' in self.app.module.params:
+            logId = 0
+            for item in self.app.module.params['logs']:
+                logId += 1
+                log = {
+                    'CloudWatchLoggingOptionId': str(logId),
+                    'LogStreamARN': item['stream_arn'],
+                    'RoleARN': item['role_arn']
+                }
+                expected.append(log)
 
         return expected
 
@@ -754,6 +755,9 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         return False
 
     def is_log_configuration_changed(self):
+        if 'logs' not in self.app.module.params:
+            return False
+
         if len(self.app.module.params['logs']) != len(
                 self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']):
             return True
