@@ -974,6 +974,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         mock_describe_application_response = {
             'ApplicationDetail': {
                 'ApplicationVersionId': 11,
+                'ApplicationStatus': 'RUNNING',
             }
         }
 

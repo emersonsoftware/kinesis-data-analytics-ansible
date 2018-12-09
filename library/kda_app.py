@@ -2,6 +2,8 @@
 
 __version__ = '${version}'
 
+from retrying import retry
+
 try:
     import boto3
     import boto
@@ -87,6 +89,7 @@ class KinesisDataAnalyticsApp:
             matched_describe_outputs = [i for i in self.current_state['ApplicationDetail']['OutputDescriptions'] if
                                         i['Name'] == item['name']]
             if len(matched_describe_outputs) <= 0:
+                self.wait_till_updatable_state()
                 self.client.add_application_output(ApplicationName=self.module.params['name'],
                                                    CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                                        'ApplicationVersionId'],
@@ -96,6 +99,7 @@ class KinesisDataAnalyticsApp:
             matched_desired_outputs = [i for i in self.module.params['outputs'] if
                                       i['name'] == item['Name']]
             if len(matched_desired_outputs) <= 0:
+                self.wait_till_updatable_state()
                 self.client.delete_application_output(
                     ApplicationName=self.module.params['name'],
                     CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
@@ -109,6 +113,7 @@ class KinesisDataAnalyticsApp:
                     matched_describe_logs = [i for i in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
                                                 i['LogStreamARN'] == item['stream_arn']]
                     if len(matched_describe_logs) <= 0:
+                        self.wait_till_updatable_state()
                         self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
                                                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                                                'ApplicationVersionId'],
@@ -117,6 +122,7 @@ class KinesisDataAnalyticsApp:
                                                                'RoleARN': item['role_arn']
                                                            })
                 else:
+                    self.wait_till_updatable_state()
                     self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
                                                                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                                                                'ApplicationVersionId'],
@@ -131,12 +137,14 @@ class KinesisDataAnalyticsApp:
                     matched_desired_logs = [i for i in self.module.params['logs'] if
                                                i['stream_arn'] == item['LogStreamARN']]
                     if len(matched_desired_logs) <= 0:
+                        self.wait_till_updatable_state()
                         self.client.delete_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
                                                                                   CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                                                                       'ApplicationVersionId'],
                                                                                   CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
 
                 else:
+                    self.wait_till_updatable_state()
                     self.client.delete_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
                                                                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                                                                'ApplicationVersionId'],
@@ -152,6 +160,12 @@ class KinesisDataAnalyticsApp:
                 return 'AppNotFound'
             else:
                 return 'Unknown'
+
+    @retry(stop_max_delay=300000, wait_fixed=5000)
+    def wait_till_updatable_state(self):
+        self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
+        if self.current_state['ApplicationDetail']['ApplicationStatus'] not in ['READY', 'RUNNING']:
+            raise Exception('application is not updatable...!!')
 
     def get_input_configuration(self):
         inputs = []
