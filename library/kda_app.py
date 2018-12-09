@@ -292,15 +292,11 @@ class KinesisDataAnalyticsApp:
             'ApplicationCode'] or self.is_input_configuration_change() or self.is_output_configuration_change() or self.is_log_configuration_changed()
 
     def is_output_configuration_change(self):
-        if len(self.module.params['outputs']) != len(
-                self.current_state['ApplicationDetail']['OutputDescriptions']):
-            return True
-
         for output in self.module.params['outputs']:
             matched_describe_outputs = [i for i in self.current_state['ApplicationDetail']['OutputDescriptions'] if
                                         i['Name'] == output['name']]
             if len(matched_describe_outputs) != 1:
-                return True
+                continue
             describe_output = matched_describe_outputs[0]
 
             if output['type'] == 'streams':
@@ -333,14 +329,11 @@ class KinesisDataAnalyticsApp:
         return False
 
     def is_input_configuration_change(self):
-        if len(self.module.params['inputs']) != len(self.current_state['ApplicationDetail']['InputDescriptions']):
-            return True
-
         for input in self.module.params['inputs']:
             matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
                                        i['NamePrefix'] == input['name_prefix']]
             if len(matched_describe_inputs) != 1:
-                return True
+                continue
             describe_input = matched_describe_inputs[0]
 
             if input['schema']['format']['type'] != describe_input['InputSchema']['RecordFormat']['RecordFormatType']:
@@ -410,16 +403,13 @@ class KinesisDataAnalyticsApp:
     def is_log_configuration_changed(self):
         if 'logs' not in self.module.params:
             return False
-        if len(self.module.params['logs']) != len(
-                self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']):
-            return True
 
         for log in self.module.params['logs']:
             matched_describe_logs = [i for i in
                                      self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
                                      i['LogStreamARN'] == log['stream_arn']]
             if len(matched_describe_logs) != 1:
-                return True
+                continue
             describe_log = matched_describe_logs[0]
 
             if log['role_arn'] != describe_log['RoleARN']:
