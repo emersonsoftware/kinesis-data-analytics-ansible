@@ -490,6 +490,43 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             ApplicationName='testifyApp',
             CurrentApplicationVersionId=11, OutputId=expected_output_id)
 
+    def test_add_application_cloud_watch_logging_option_gets_called_when_new_log_detected(self):
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+        new_log = {
+            'stream_arn': 'new::ubheardogstream::arn',
+            'role_arn': 'new::ubheardogrole::arn',
+        }
+        self.app.module.params['logs'].append(new_log)
+        expected_log = {
+            'LogStreamARN': new_log['stream_arn'],
+            'RoleARN': new_log['role_arn'],
+        }
+
+        self.app.process_request()
+
+        self.app.client.add_application_cloud_watch_logging_option.assert_called_once_with(
+            ApplicationName='testifyApp',
+            CurrentApplicationVersionId=11, CloudWatchLoggingOption=expected_log)
+
+    def test_delete_application_cloud_watch_logging_option_gets_called_when_undesired_log_detected(self):
+        self.app.module.params['logs'][0]['stream_arn'] = 'undesiredLogStreamARN'
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        self.app.module.params['logs'][0]['stream_arn'] = 'newLogStreamARN'
+
+        self.app.process_request()
+
+        expected_log_id = self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'][0]['CloudWatchLoggingOptionId']
+        self.app.client.delete_application_cloud_watch_logging_option.assert_called_once_with(
+            ApplicationName='testifyApp',
+            CurrentApplicationVersionId=11, CloudWatchLoggingOptionId=expected_log_id)
+
     def get_expected_input_configuration(self):
         expected = []
         for item in self.app.module.params['inputs']:

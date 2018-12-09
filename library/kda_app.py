@@ -61,6 +61,8 @@ class KinesisDataAnalyticsApp:
 
         self.patch_outputs()
 
+        self.patch_logs()
+
     def patch_inputs(self):
         for item in self.module.params['inputs']:
             matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
@@ -100,6 +102,46 @@ class KinesisDataAnalyticsApp:
                     CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                         'ApplicationVersionId'],
                     OutputId=item['OutputId'])
+
+    def patch_logs(self):
+        if 'logs' in self.module.params:
+            for item in self.module.params['logs']:
+                if 'CloudWatchLoggingOptionDescriptions' in self.current_state['ApplicationDetail']:
+                    matched_describe_logs = [i for i in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
+                                                i['LogStreamARN'] == item['stream_arn']]
+                    if len(matched_describe_logs) <= 0:
+                        self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
+                                                           CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                                               'ApplicationVersionId'],
+                                                                               CloudWatchLoggingOption={
+                                                               'LogStreamARN': item['stream_arn'],
+                                                               'RoleARN': item['role_arn']
+                                                           })
+                else:
+                    self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
+                                                                           CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                                                               'ApplicationVersionId'],
+                                                                           CloudWatchLoggingOption={
+                                                                               'LogStreamARN': item['stream_arn'],
+                                                                               'RoleARN': item['role_arn']
+                                                                           })
+
+        if 'CloudWatchLoggingOptionDescriptions' in self.current_state['ApplicationDetail']:
+            for item in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']:
+                if 'logs' in self.module.params:
+                    matched_desired_logs = [i for i in self.module.params['logs'] if
+                                               i['stream_arn'] == item['LogStreamARN']]
+                    if len(matched_desired_logs) <= 0:
+                        self.client.delete_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
+                                                                                  CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                                                                      'ApplicationVersionId'],
+                                                                                  CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+
+                else:
+                    self.client.delete_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
+                                                                           CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                                                               'ApplicationVersionId'],
+                                                                              CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
