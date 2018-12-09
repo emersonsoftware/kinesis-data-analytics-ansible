@@ -57,7 +57,6 @@ class KinesisDataAnalyticsApp:
                                        ApplicationUpdate=self.get_app_update_configuration())
 
     def patch_application(self):
-        self.patch_inputs()
 
         self.patch_outputs()
 

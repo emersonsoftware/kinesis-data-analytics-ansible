@@ -394,66 +394,6 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.client.update_application.assert_not_called()
 
-    def test_add_application_input_gets_called_when_new_input_detected(self):
-        self.setup_for_update_application(app_code=self.app.module.params['code'],
-                                          inputs=self.get_expected_describe_input_configuration(),
-                                          outputs=self.get_expected_describe_output_configuration(),
-                                          logs=self.get_expected_describe_logs_configuration())
-
-        new_input = {
-            'name_prefix': 'newInputMAnnn',
-            'parallelism': 1,
-            'kinesis': {
-                'type': 'streams',
-                'resource_arn': 'newinput::kindaa::arn',
-                'role_arn': 'newinput::kindaa::arn'
-            },
-            'schema': {
-                'columns': [
-                    {
-                        'name': 'sensor',
-                        'type': 'VARCHAR(1)',
-                        'mapping': '$.sensor_id',
-                    },
-                    {
-                        'name': 'temp',
-                        'type': 'NUMERIC',
-                        'mapping': '$.temp',
-                    },
-                ],
-                'format': {
-                    'type': 'JSON',
-                    'json_mapping_row_path': '$',
-                }
-            }
-
-        }
-
-        self.app.module.params['inputs'].append(new_input)
-
-        self.app.process_request()
-
-        self.app.client.add_application_input.assert_called_once_with(ApplicationName='testifyApp',
-                                                                      CurrentApplicationVersionId=11,
-                                                                      Input=self.get_single_input_configuration(
-                                                                          new_input))
-
-    def test_delete_application_input_processing_configuration_gets_called_when_undesired_input_detected(self):
-        self.app.module.params['inputs'][0]['name_prefix'] = 'undesiredInputStream'
-        self.setup_for_update_application(app_code=self.app.module.params['code'],
-                                          inputs=self.get_expected_describe_input_configuration(),
-                                          outputs=self.get_expected_describe_output_configuration(),
-                                          logs=self.get_expected_describe_logs_configuration())
-
-        self.app.module.params['inputs'][0]['name_prefix'] = 'newInputStream'
-
-        self.app.process_request()
-
-        expected_input_id = self.app.current_state['ApplicationDetail']['InputDescriptions'][0]['InputId']
-        self.app.client.delete_application_input_processing_configuration.assert_called_once_with(
-            ApplicationName='testifyApp',
-            CurrentApplicationVersionId=11, InputId=expected_input_id)
-
     def test_add_application_output_gets_called_when_new_output_detected(self):
         self.setup_for_update_application(app_code=self.app.module.params['code'],
                                           inputs=self.get_expected_describe_input_configuration(),
