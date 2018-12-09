@@ -332,7 +332,7 @@ class KinesisDataAnalyticsApp:
             matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
                                        i['NamePrefix'] == input['name_prefix']]
             if len(matched_describe_inputs) != 1:
-                continue
+                return True
             describe_input = matched_describe_inputs[0]
 
             if input['schema']['format']['type'] != describe_input['InputSchema']['RecordFormat']['RecordFormatType']:
@@ -419,13 +419,10 @@ class KinesisDataAnalyticsApp:
     def get_input_update_configuration(self):
         expected = []
         for item in self.module.params['inputs']:
-            matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
-                                       i['NamePrefix'] == item['name_prefix']]
-            if len(matched_describe_inputs) != 1:
-                continue
+            describe_inputs = self.current_state['ApplicationDetail']['InputDescriptions']
 
             input_item = {
-                'InputId': matched_describe_inputs[0]['InputId'],
+                'InputId': describe_inputs[0]['InputId'],
                 'NamePrefixUpdate': item['name_prefix'],
                 'InputParallelismUpdate': {
                     'CountUpdate': item['parallelism']
