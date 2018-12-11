@@ -23,6 +23,18 @@ class KinesisDataAnalyticsApp:
             self.module.fail_json(msg='boto and boto3 are required for this module')
         self.client = boto3.client('kinesisanalytics')
 
+    @staticmethod
+    def _define_module_argument_spec():
+        return dict(name=dict(required=True),
+                    description=dict(required=True),
+                    code=dict(required=True),
+                    inputs=dict(required=True, type='list', default=[]),
+                    outputs=dict(required=True, type='list', default=[]),
+                    logs=dict(required=False, type='list', default=[]),
+                    starting_position=dict(default='LAST_STOPPED_POINT',
+                                           choices=['NOW', 'TRIM_HORIZON', 'LAST_STOPPED_POINT']),
+                    )
+
     def process_request(self):
         status = self.get_current_state()
         if status is 'AppNotFound':
@@ -97,7 +109,7 @@ class KinesisDataAnalyticsApp:
 
         for item in self.current_state['ApplicationDetail']['OutputDescriptions']:
             matched_desired_outputs = [i for i in self.module.params['outputs'] if
-                                      i['name'] == item['Name']]
+                                       i['name'] == item['Name']]
             if len(matched_desired_outputs) <= 0:
                 self.wait_till_updatable_state()
                 self.client.delete_application_output(
@@ -110,21 +122,24 @@ class KinesisDataAnalyticsApp:
         if 'logs' in self.module.params:
             for item in self.module.params['logs']:
                 if 'CloudWatchLoggingOptionDescriptions' in self.current_state['ApplicationDetail']:
-                    matched_describe_logs = [i for i in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
-                                                i['LogStreamARN'] == item['stream_arn']]
+                    matched_describe_logs = [i for i in self.current_state['ApplicationDetail'][
+                        'CloudWatchLoggingOptionDescriptions'] if
+                                             i['LogStreamARN'] == item['stream_arn']]
                     if len(matched_describe_logs) <= 0:
                         self.wait_till_updatable_state()
-                        self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
-                                                           CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                                               'ApplicationVersionId'],
-                                                                               CloudWatchLoggingOption={
-                                                               'LogStreamARN': item['stream_arn'],
-                                                               'RoleARN': item['role_arn']
-                                                           })
+                        self.client.add_application_cloud_watch_logging_option(
+                            ApplicationName=self.module.params['name'],
+                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                'ApplicationVersionId'],
+                            CloudWatchLoggingOption={
+                                'LogStreamARN': item['stream_arn'],
+                                'RoleARN': item['role_arn']
+                            })
                 else:
                     self.wait_till_updatable_state()
                     self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
-                                                                           CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                                                           CurrentApplicationVersionId=
+                                                                           self.current_state['ApplicationDetail'][
                                                                                'ApplicationVersionId'],
                                                                            CloudWatchLoggingOption={
                                                                                'LogStreamARN': item['stream_arn'],
@@ -135,20 +150,22 @@ class KinesisDataAnalyticsApp:
             for item in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']:
                 if 'logs' in self.module.params:
                     matched_desired_logs = [i for i in self.module.params['logs'] if
-                                               i['stream_arn'] == item['LogStreamARN']]
+                                            i['stream_arn'] == item['LogStreamARN']]
                     if len(matched_desired_logs) <= 0:
                         self.wait_till_updatable_state()
-                        self.client.delete_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
-                                                                                  CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                                                                      'ApplicationVersionId'],
-                                                                                  CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                        self.client.delete_application_cloud_watch_logging_option(
+                            ApplicationName=self.module.params['name'],
+                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                'ApplicationVersionId'],
+                            CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
 
                 else:
                     self.wait_till_updatable_state()
-                    self.client.delete_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
-                                                                           CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                                                               'ApplicationVersionId'],
-                                                                              CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                    self.client.delete_application_cloud_watch_logging_option(
+                        ApplicationName=self.module.params['name'],
+                        CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                            'ApplicationVersionId'],
+                        CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -547,8 +564,14 @@ class KinesisDataAnalyticsApp:
 
 
 def main():
-    print('who cares')
+    module = AnsibleModule(
+        argument_spec=KinesisDataAnalyticsApp._define_module_argument_spec(),
+        supports_check_mode=True
+    )
 
+    kda_app = KinesisDataAnalyticsApp(module)
+    kda_app.process_request()
 
+from ansible.module_utils.basic import *  # pylint: disable=W0614
 if __name__ == '__main__':
     main()
