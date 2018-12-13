@@ -2,7 +2,7 @@
 
 __version__ = '${version}'
 
-from retrying import retry
+import time
 
 try:
     import boto3
@@ -16,6 +16,8 @@ except ImportError:
 
 class KinesisDataAnalyticsApp:
     current_state = None
+    created = False
+    changed = False
 
     def __init__(self, module):
         self.module = module
@@ -28,9 +30,9 @@ class KinesisDataAnalyticsApp:
         return dict(name=dict(required=True),
                     description=dict(required=True),
                     code=dict(required=True),
-                    inputs=dict(required=True, type='list', default=[]),
-                    outputs=dict(required=True, type='list', default=[]),
-                    logs=dict(required=False, type='list', default=[]),
+                    inputs=dict(required=True, type='list'),
+                    outputs=dict(required=True, type='list'),
+                    logs=dict(required=False, type='list'),
                     starting_position=dict(default='LAST_STOPPED_POINT',
                                            choices=['NOW', 'TRIM_HORIZON', 'LAST_STOPPED_POINT']),
                     )
@@ -40,17 +42,20 @@ class KinesisDataAnalyticsApp:
         if status is 'AppNotFound':
             self.create_new_application()
             self.start_application()
+            self.created = True
         elif status is 'AppFound':
             if self.is_app_updatable_state_changed():
                 self.update_application()
+                self.changed = True
             self.patch_application()
+        self.module.exit_json(created=self.created, changed=self.changed)
 
     def start_application(self):
         self.client.start_application(ApplicationName=self.module.params['name'],
                                       InputConfigurations=self.get_input_start_configuration())
 
     def create_new_application(self):
-        if 'logs' in self.module.params:
+        if 'logs' in self.module.params and self.module.params['logs'] != None:
             self.client.create_application(ApplicationName=self.module.params['name'],
                                            ApplicationDescription=self.module.params['description'],
                                            Inputs=[self.get_input_configuration()],
@@ -106,6 +111,7 @@ class KinesisDataAnalyticsApp:
                                                    CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                                        'ApplicationVersionId'],
                                                    Output=self.get_single_output_configuration(item))
+                self.changed = True
 
         for item in self.current_state['ApplicationDetail']['OutputDescriptions']:
             matched_desired_outputs = [i for i in self.module.params['outputs'] if
@@ -117,9 +123,10 @@ class KinesisDataAnalyticsApp:
                     CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                         'ApplicationVersionId'],
                     OutputId=item['OutputId'])
+                self.changed = True
 
     def patch_logs(self):
-        if 'logs' in self.module.params:
+        if 'logs' in self.module.params and self.module.params['logs'] != None:
             for item in self.module.params['logs']:
                 if 'CloudWatchLoggingOptionDescriptions' in self.current_state['ApplicationDetail']:
                     matched_describe_logs = [i for i in self.current_state['ApplicationDetail'][
@@ -135,6 +142,7 @@ class KinesisDataAnalyticsApp:
                                 'LogStreamARN': item['stream_arn'],
                                 'RoleARN': item['role_arn']
                             })
+                        self.changed = True
                 else:
                     self.wait_till_updatable_state()
                     self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
@@ -145,6 +153,7 @@ class KinesisDataAnalyticsApp:
                                                                                'LogStreamARN': item['stream_arn'],
                                                                                'RoleARN': item['role_arn']
                                                                            })
+                    self.changed = True
 
         if 'CloudWatchLoggingOptionDescriptions' in self.current_state['ApplicationDetail']:
             for item in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']:
@@ -158,6 +167,7 @@ class KinesisDataAnalyticsApp:
                             CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                 'ApplicationVersionId'],
                             CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                        self.changed = True
 
                 else:
                     self.wait_till_updatable_state()
@@ -166,6 +176,7 @@ class KinesisDataAnalyticsApp:
                         CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                             'ApplicationVersionId'],
                         CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                    self.changed = True
 
     def get_current_state(self):
         from botocore.exceptions import ClientError
@@ -178,11 +189,14 @@ class KinesisDataAnalyticsApp:
             else:
                 return 'Unknown'
 
-    @retry(stop_max_delay=300000, wait_fixed=5000)
     def wait_till_updatable_state(self):
-        self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
-        if self.current_state['ApplicationDetail']['ApplicationStatus'] not in ['READY', 'RUNNING']:
-            raise Exception('application is not updatable...!!')
+        wait_complete = time.time() + 300
+        while time.time() < wait_complete:
+            self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
+            if self.current_state['ApplicationDetail']['ApplicationStatus'] in ['READY', 'RUNNING']:
+                return
+            time.sleep(5)
+        self.module.fail_json(msg="wait for updatable application timeout on %s" % time.asctime())
 
     def get_input_configuration(self):
         inputs = []
@@ -278,11 +292,12 @@ class KinesisDataAnalyticsApp:
 
     def get_log_configuration(self):
         logs = []
-        for item in self.module.params['logs']:
-            logs.append({
-                'LogStreamARN': item['stream_arn'],
-                'RoleARN': item['role_arn'],
-            })
+        if 'logs' in self.module.params and self.module.params['logs'] != None:
+            for item in self.module.params['logs']:
+                logs.append({
+                    'LogStreamARN': item['stream_arn'],
+                    'RoleARN': item['role_arn'],
+                })
 
         return logs
 
@@ -431,7 +446,7 @@ class KinesisDataAnalyticsApp:
         return False
 
     def is_log_configuration_changed(self):
-        if 'logs' not in self.module.params:
+        if 'logs' not in self.module.params or self.module.params['logs'] == None:
             return False
 
         for log in self.module.params['logs']:
@@ -571,6 +586,7 @@ def main():
 
     kda_app = KinesisDataAnalyticsApp(module)
     kda_app.process_request()
+
 
 from ansible.module_utils.basic import *  # pylint: disable=W0614
 if __name__ == '__main__':
