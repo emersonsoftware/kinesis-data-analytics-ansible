@@ -64,8 +64,7 @@ class KinesisDataAnalyticsApp:
                 self.changed = True
             self.patch_application()
 
-        # BJF: This is not idiomatic.  First arg should indicated whether or not a change occurred; second arg is state
-        self.module.exit_json(changed=self.changed)
+        self.module.exit_json(changed=self.changed, kda_app=self.get_final_state())
 
     def start_application(self):
         self.client.start_application(ApplicationName=self.module.params['name'],
@@ -186,6 +185,12 @@ class KinesisDataAnalyticsApp:
                 return 'AppNotFound'
             else:
                 self.module.fail_json(msg="unable to obtain current state of application: {}".format(err))
+
+    def get_final_state(self):
+        try:
+            return self.client.describe_application(ApplicationName=self.module.params['name'])
+        except BotoCoreError as e:
+            self.module.fail_json(msg="unable to obtain final state of application: {}".format(e))
 
     def wait_till_updatable_state(self):
         # BJF: This should be configurable with a documented default.  Giving the operator no choice is unfriendly.

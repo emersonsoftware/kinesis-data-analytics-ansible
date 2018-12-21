@@ -137,24 +137,25 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.process_request()
 
         self.assertEqual(resp, self.app.current_state)
-        self.app.client.describe_application.assert_called_once_with(ApplicationName='testifyApp')
+        self.app.client.describe_application.assert_called_with(ApplicationName='testifyApp')
 
     def test_process_request_calls_create_application_when_application_not_found(self):
         self.setup_for_create_application()
 
         self.app.process_request()
 
-        self.app.client.describe_application.assert_called_once()
         self.app.client.create_application.assert_called_once()
 
     def test_process_request_do_not_call_create_application_when_describe_application_call_fails(self):
         unknown_exception = {'Error': {'Code': 'lol'}}
-        self.app.client.describe_application = mock.MagicMock(side_effect=ClientError(unknown_exception, ''))
+        mock_final_describe_application_response = {
+            'final': 'state'
+        }
+        self.app.client.describe_application.side_effect = [ClientError(unknown_exception, ''), mock_final_describe_application_response]
         self.app.client.create_application = mock.MagicMock()
 
         self.app.process_request()
 
-        self.app.client.describe_application.assert_called_once()
         self.app.client.create_application.assert_not_called()
         args, kwargs = self.module.fail_json.call_args
         self.assertIn('unable to obtain current state of application:', kwargs['msg'])
@@ -468,6 +469,17 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.delete_application_cloud_watch_logging_option.assert_called_once_with(
             ApplicationName='testifyApp',
             CurrentApplicationVersionId=11, CloudWatchLoggingOptionId=expected_log_id)
+
+    def test_receive_final_state_when_operation_succeed(self):
+        resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}
+        mock_final_describe_application_response = {
+            'lol': 'lol'
+        }
+        self.app.client.describe_application.side_effect = [ClientError(resource_not_found, ''), mock_final_describe_application_response]
+
+        self.app.process_request()
+
+        self.module.exit_json.assert_called_once_with(changed=True, kda_app=mock_final_describe_application_response)
 
     def get_expected_input_configuration(self):
         expected = []
@@ -968,7 +980,10 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
     def setup_for_create_application(self):
         resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}
-        self.app.client.describe_application = mock.MagicMock(side_effect=ClientError(resource_not_found, ''))
+        mock_final_describe_application_response = {
+            'final': 'state'
+        }
+        self.app.client.describe_application.side_effect = [ClientError(resource_not_found, ''), mock_final_describe_application_response]
         self.app.client.create_application = mock.MagicMock()
         self.app.client.start_application = mock.MagicMock()
 
