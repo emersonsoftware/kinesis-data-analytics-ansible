@@ -75,22 +75,18 @@ class KinesisDataAnalyticsApp:
                                       InputConfigurations=self.get_input_start_configuration())
 
     def create_new_application(self):
+        args = {'ApplicationName': self.module.params['name'],
+                'ApplicationDescription': self.module.params['description'],
+                'Inputs': [self.get_input_configuration()],
+                'Outputs': self.get_output_configuration(),
+                'ApplicationCode': self.module.params['code']
+                }
+
         # BJF: Error handling?
-        if 'logs' in self.module.params and self.module.params['logs'] != None:
-            # BJF: nitpick -- since these are all kwargs, you should be able to define a single input dictionary
-            #      and only append 'CloudWatchLoggingOptions' as needed.
-            self.client.create_application(ApplicationName=self.module.params['name'],
-                                           ApplicationDescription=self.module.params['description'],
-                                           Inputs=[self.get_input_configuration()],
-                                           Outputs=self.get_output_configuration(),
-                                           CloudWatchLoggingOptions=self.get_log_configuration(),
-                                           ApplicationCode=self.module.params['code'])
-        else:
-            self.client.create_application(ApplicationName=self.module.params['name'],
-                                           ApplicationDescription=self.module.params['description'],
-                                           Inputs=self.get_input_configuration(),
-                                           Outputs=self.get_output_configuration(),
-                                           ApplicationCode=self.module.params['code'])
+        if 'logs' in self.module.params and self.module.params['logs'] is not None:
+            args['CloudWatchLoggingOptions'] = self.get_log_configuration()
+
+        self.client.create_application(**args)
 
     def update_application(self):
         # BJF: Error handling?
