@@ -100,32 +100,9 @@ class KinesisDataAnalyticsApp:
                                        ApplicationUpdate=self.get_app_update_configuration())
 
     def patch_application(self):
-        # BJF: patch_inputs?
         self.patch_outputs()
 
         self.patch_logs()
-
-    # BJF: Who calls this?  Does this belong in patch_application?
-    def patch_inputs(self):
-        for item in self.module.params['inputs']:
-            matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
-                                       i['NamePrefix'] == item['name_prefix']]
-            if len(matched_describe_inputs) <= 0:
-                self.client.add_application_input(ApplicationName=self.module.params['name'],
-                                                  CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                                      'ApplicationVersionId'],
-                                                  Input=self.get_single_input_configuration(item))
-
-        for item in self.current_state['ApplicationDetail']['InputDescriptions']:
-            matched_desired_inputs = [i for i in self.module.params['inputs'] if
-                                      i['name_prefix'] == item['NamePrefix']]
-            if len(matched_desired_inputs) <= 0:
-                # BJF: Why no wait for updateable state here?
-                self.client.delete_application_input_processing_configuration(
-                    ApplicationName=self.module.params['name'],
-                    CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                        'ApplicationVersionId'],
-                    InputId=item['InputId'])
 
     def patch_outputs(self):
         for item in self.module.params['outputs']:
