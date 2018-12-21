@@ -617,16 +617,13 @@ class KinesisDataAnalyticsApp:
 def main():
     module = AnsibleModule(
         argument_spec=KinesisDataAnalyticsApp._define_module_argument_spec(),
-        # BJF: Your module absolutely does not support check mode.  Set this to false.
-        #      Check mode is a flag that can be provided that allows the module to tell you if it thinks changes *would*
-        #      be made without actually making them.  See the APIGW module for usage.
-        supports_check_mode=True
+        supports_check_mode=False
     )
 
     kda_app = KinesisDataAnalyticsApp(module)
     kda_app.process_request()
 
 
-from ansible.module_utils.basic import *  # pylint: disable=W0614
+#from ansible.module_utils.basic import *  # pylint: disable=W0614
 if __name__ == '__main__':
     main()
