@@ -63,8 +63,6 @@ class KinesisDataAnalyticsApp:
                 self.update_application()
                 self.changed = True
             self.patch_application()
-        # BJF: The 'Unknown' state is not being handled here.  Shouldn't it return an error?
-
 
         # BJF: This is not idiomatic.  First arg should indicated whether or not a change occurred; second arg is state
         self.module.exit_json(changed=self.changed)
@@ -187,7 +185,7 @@ class KinesisDataAnalyticsApp:
             if err.response['Error']['Code'] == "ResourceNotFoundException":
                 return 'AppNotFound'
             else:
-                return 'Unknown'
+                self.module.fail_json(msg="unable to obtain current state of application: {}".format(err))
 
     def wait_till_updatable_state(self):
         # BJF: This should be configurable with a documented default.  Giving the operator no choice is unfriendly.

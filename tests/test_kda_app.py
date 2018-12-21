@@ -156,6 +156,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.client.describe_application.assert_called_once()
         self.app.client.create_application.assert_not_called()
+        args, kwargs = self.module.fail_json.call_args
+        self.assertIn('unable to obtain current state of application:', kwargs['msg'])
 
     def test_create_application_base_parameters_mapped_correctly(self):
         self.setup_for_create_application()
