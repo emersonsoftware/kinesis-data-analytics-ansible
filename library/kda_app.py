@@ -28,7 +28,6 @@ except ImportError:
 #         the thing you just created/changed.  This is very useful when debugging.
 class KinesisDataAnalyticsApp:
     current_state = None
-    created = False
     changed = False
 
     def __init__(self, module):
@@ -58,7 +57,7 @@ class KinesisDataAnalyticsApp:
             self.create_new_application()
             # BJF: Could this be controlled by a flag?  What about dev, where I don't want to start the app post-deploy?
             self.start_application()
-            self.created = True
+            self.changed = True
         elif status is 'AppFound':
             if self.is_app_updatable_state_changed():
                 self.update_application()
@@ -68,7 +67,7 @@ class KinesisDataAnalyticsApp:
 
 
         # BJF: This is not idiomatic.  First arg should indicated whether or not a change occurred; second arg is state
-        self.module.exit_json(created=self.created, changed=self.changed)
+        self.module.exit_json(changed=self.changed)
 
     def start_application(self):
         self.client.start_application(ApplicationName=self.module.params['name'],
