@@ -14,6 +14,18 @@ except ImportError:
     HAS_BOTO3 = False
 
 
+# BJF: Top-level thoughts:
+#      1: There is typically a "flower-box" style comment at the top where you claim authorship and document your license (needed for open sourcing)
+#      2: It is customary to document your module's usage.  See the APIGW modules for examples.
+#         Well-formed docs of this style can be used to generate documentation
+#      3: Error handling is insufficient.  Basically, any failure path should cause a well-behaved
+#         invocation of fail_json with an appropriate error message.  As-is, exceptions will bubble straight
+#         to the user and crash the run.
+#      4: There are a lot of happy path assumptions about how well-formed inputs and outputs will be.
+#         For things not enforced by the module argument spec and especially for boto output, I would
+#         strongly advise switching from []-based key lookup to using .get() with valid default arguments
+#      5: It is idiomatic for your module when things are happy to return an object that shows the state of
+#         the thing you just created/changed.  This is very useful when debugging.
 class KinesisDataAnalyticsApp:
     current_state = None
     created = False
@@ -27,6 +39,9 @@ class KinesisDataAnalyticsApp:
 
     @staticmethod
     def _define_module_argument_spec():
+        # BJF: This would be a bit more complete if the dictionary more aggressively enforced the full schema.
+        #      As it stands, there are likely a number of corner cases that can/will arise due to unexpected
+        #      permutations of invalid input
         return dict(name=dict(required=True),
                     description=dict(required=True),
                     code=dict(required=True),
@@ -41,6 +56,7 @@ class KinesisDataAnalyticsApp:
         status = self.get_current_state()
         if status is 'AppNotFound':
             self.create_new_application()
+            # BJF: Could this be controlled by a flag?  What about dev, where I don't want to start the app post-deploy?
             self.start_application()
             self.created = True
         elif status is 'AppFound':
@@ -48,6 +64,10 @@ class KinesisDataAnalyticsApp:
                 self.update_application()
                 self.changed = True
             self.patch_application()
+        # BJF: The 'Unknown' state is not being handled here.  Shouldn't it return an error?
+
+
+        # BJF: This is not idiomatic.  First arg should indicated whether or not a change occurred; second arg is state
         self.module.exit_json(created=self.created, changed=self.changed)
 
     def start_application(self):
@@ -55,7 +75,10 @@ class KinesisDataAnalyticsApp:
                                       InputConfigurations=self.get_input_start_configuration())
 
     def create_new_application(self):
+        # BJF: Error handling?
         if 'logs' in self.module.params and self.module.params['logs'] != None:
+            # BJF: nitpick -- since these are all kwargs, you should be able to define a single input dictionary
+            #      and only append 'CloudWatchLoggingOptions' as needed.
             self.client.create_application(ApplicationName=self.module.params['name'],
                                            ApplicationDescription=self.module.params['description'],
                                            Inputs=[self.get_input_configuration()],
@@ -70,17 +93,19 @@ class KinesisDataAnalyticsApp:
                                            ApplicationCode=self.module.params['code'])
 
     def update_application(self):
+        # BJF: Error handling?
         self.client.update_application(ApplicationName=self.module.params['name'],
                                        CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                            'ApplicationVersionId'],
                                        ApplicationUpdate=self.get_app_update_configuration())
 
     def patch_application(self):
-
+        # BJF: patch_inputs?
         self.patch_outputs()
 
         self.patch_logs()
 
+    # BJF: Who calls this?  Does this belong in patch_application?
     def patch_inputs(self):
         for item in self.module.params['inputs']:
             matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
@@ -95,6 +120,7 @@ class KinesisDataAnalyticsApp:
             matched_desired_inputs = [i for i in self.module.params['inputs'] if
                                       i['name_prefix'] == item['NamePrefix']]
             if len(matched_desired_inputs) <= 0:
+                # BJF: Why no wait for updateable state here?
                 self.client.delete_application_input_processing_configuration(
                     ApplicationName=self.module.params['name'],
                     CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
@@ -184,17 +210,21 @@ class KinesisDataAnalyticsApp:
             self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
             return 'AppFound'
         except ClientError as err:
+            # BJF: Not sure if ClientError is guaranteed to have this structure, but using .get() with a default
+            #      arg is a safe way to avoid blowing up when accessing nested structures
             if err.response['Error']['Code'] == "ResourceNotFoundException":
                 return 'AppNotFound'
             else:
                 return 'Unknown'
 
     def wait_till_updatable_state(self):
+        # BJF: This should be configurable with a documented default.  Giving the operator no choice is unfriendly.
         wait_complete = time.time() + 300
         while time.time() < wait_complete:
             self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
             if self.current_state['ApplicationDetail']['ApplicationStatus'] in ['READY', 'RUNNING']:
                 return
+            # BJF: nitpick, but this could also be configurable
             time.sleep(5)
         self.module.fail_json(msg="wait for updatable application timeout on %s" % time.asctime())
 
@@ -206,6 +236,11 @@ class KinesisDataAnalyticsApp:
         return inputs
 
     def get_single_input_configuration(self, item):
+        # BJF: What happens in here if malformed input is provided?
+        #      How are you informing the user to what's wrong?  E.g. what would happen if I provided schema.formmmat.type?
+        #      This may be an oversimplification, but there are really two options here:
+        #        1: Update the module spec to aggressively enforce the expected schema permutations
+        #        2: Add a lot of defensive code here to enforce the schema and provide useful feedback on error
         input_item = {
             'NamePrefix': item['name_prefix'],
             'InputParallelism': {
@@ -266,6 +301,7 @@ class KinesisDataAnalyticsApp:
         return outputs
 
     def get_single_output_configuration(self, item):
+        # BJF: Same general comments about validation and error returns
         output = {
             'Name': item['name'],
             'DestinationSchema': {
@@ -581,6 +617,9 @@ class KinesisDataAnalyticsApp:
 def main():
     module = AnsibleModule(
         argument_spec=KinesisDataAnalyticsApp._define_module_argument_spec(),
+        # BJF: Your module absolutely does not support check mode.  Set this to false.
+        #      Check mode is a flag that can be provided that allows the module to tell you if it thinks changes *would*
+        #      be made without actually making them.  See the APIGW module for usage.
         supports_check_mode=True
     )
 
