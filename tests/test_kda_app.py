@@ -7,6 +7,7 @@ from mock import patch
 from botocore.exceptions import ClientError
 from ddt import ddt, data, unpack
 import unittest
+from botocore.exceptions import BotoCoreError
 
 
 @ddt
@@ -227,6 +228,15 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                                                                    ApplicationCode=mock.ANY, Inputs=mock.ANY,
                                                                    Outputs=mock.ANY)
 
+    def test_create_application_call_fails_provide_friendly_message(self):
+        self.setup_for_create_application()
+        self.app.client.create_application.side_effect = BotoCoreError
+
+        self.app.process_request()
+
+        self.app.client.create_application.assert_called_once()
+        self.assert_error_message('create application failed:')
+
     ''' temporary rest
     def test_start_application_when_create_application_succeed(self):
         self.setup_for_create_application()
@@ -257,6 +267,18 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.update_application.assert_called_once_with(ApplicationName='testifyApp',
                                                                    CurrentApplicationVersionId=11,
                                                                    ApplicationUpdate=self.get_expected_app_update_configuration())
+
+    def test_update_application_call_fails_provide_friendly_message(self):
+        self.setup_for_update_application(app_code='codeontheserver',
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+        self.app.client.update_application.side_effect = BotoCoreError
+
+        self.app.process_request()
+
+        self.app.client.update_application.assert_called_once()
+        self.assert_error_message('update application failed:')
 
     @data(
         (('streams', 'firehose'), (0, 0), ('JSON', 'JSON'), 0),
@@ -419,6 +441,26 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             ApplicationName='testifyApp',
             CurrentApplicationVersionId=11, Output=self.get_single_output_configuration(new_output))
 
+    def test_add_application_output_call_fails_provide_friendly_message(self):
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+        new_output = {
+            'name': 'newOutPut',
+            'type': 'streams',
+            'resource_arn': 'some::newop::arn',
+            'role_arn': 'some::newop::arn',
+            'format_type': 'JSON',
+        }
+        self.app.module.params['outputs'].append(new_output)
+        self.app.client.add_application_output.side_effect = BotoCoreError
+
+        self.app.process_request()
+
+        self.app.client.add_application_output.assert_called_once()
+        self.assert_error_message('add application output failed:')
+
     def test_delete_application_output_gets_called_when_undesired_output_detected(self):
         self.app.module.params['outputs'][0]['name'] = 'undesiredOutputStream'
         self.setup_for_update_application(app_code=self.app.module.params['code'],
@@ -434,6 +476,21 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.delete_application_output.assert_called_once_with(
             ApplicationName='testifyApp',
             CurrentApplicationVersionId=11, OutputId=expected_output_id)
+
+    def test_delete_application_output_call_fails_provide_friendly_message(self):
+        self.app.module.params['outputs'][0]['name'] = 'undesiredOutputStream'
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        self.app.module.params['outputs'][0]['name'] = 'newOutputStream'
+        self.app.client.delete_application_output.side_effect = BotoCoreError
+
+        self.app.process_request()
+
+        self.app.client.delete_application_output.assert_called_once()
+        self.assert_error_message('delete application output failed:')
 
     def test_add_application_cloud_watch_logging_option_gets_called_when_new_log_detected(self):
         self.setup_for_update_application(app_code=self.app.module.params['code'],
@@ -456,6 +513,23 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             ApplicationName='testifyApp',
             CurrentApplicationVersionId=11, CloudWatchLoggingOption=expected_log)
 
+    def test_add_application_cloud_watch_logging_option_call_fails_provide_friendly_message(self):
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+        new_log = {
+            'stream_arn': 'new::ubheardogstream::arn',
+            'role_arn': 'new::ubheardogrole::arn',
+        }
+        self.app.module.params['logs'].append(new_log)
+        self.app.client.add_application_cloud_watch_logging_option.side_effect = BotoCoreError
+
+        self.app.process_request()
+
+        self.app.client.add_application_cloud_watch_logging_option.assert_called_once()
+        self.assert_error_message('add application logging failed:')
+
     def test_delete_application_cloud_watch_logging_option_gets_called_when_undesired_log_detected(self):
         self.app.module.params['logs'][0]['stream_arn'] = 'undesiredLogStreamARN'
         self.setup_for_update_application(app_code=self.app.module.params['code'],
@@ -471,6 +545,21 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.delete_application_cloud_watch_logging_option.assert_called_once_with(
             ApplicationName='testifyApp',
             CurrentApplicationVersionId=11, CloudWatchLoggingOptionId=expected_log_id)
+
+    def test_delete_application_cloud_watch_logging_option_call_fails_provide_friendly_message(self):
+        self.app.module.params['logs'][0]['stream_arn'] = 'undesiredLogStreamARN'
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        self.app.module.params['logs'][0]['stream_arn'] = 'newLogStreamARN'
+        self.app.client.delete_application_cloud_watch_logging_option.side_effect = BotoCoreError
+
+        self.app.process_request()
+
+        self.app.client.delete_application_cloud_watch_logging_option.assert_called_once()
+        self.assert_error_message('delete application logging failed:')
 
     def test_receive_final_state_when_operation_succeed(self):
         resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}
@@ -1012,6 +1101,11 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             mock_describe_application_response['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] = logs
 
         self.app.client.describe_application = mock.MagicMock(return_value=mock_describe_application_response)
+
+    def assert_error_message(self, error_msg):
+        self.module.fail_json.assert_called_once()
+        args, kwargs = self.module.fail_json.call_args
+        self.assertIn(error_msg, kwargs['msg'])
 
 
 if __name__ == '__main__':

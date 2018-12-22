@@ -52,17 +52,22 @@ class KinesisDataAnalyticsApp:
                     )
 
     def process_request(self):
-        status = self.get_current_state()
-        if status is 'AppNotFound':
-            self.create_new_application()
-            self.changed = True
-        elif status is 'AppFound':
-            if self.is_app_updatable_state_changed():
-                self.update_application()
+        try:
+            status = self.get_current_state()
+            if status is 'AppNotFound':
+                self.create_new_application()
                 self.changed = True
-            self.patch_application()
+            elif status is 'AppFound':
+                if self.is_app_updatable_state_changed():
+                    self.update_application()
+                    self.changed = True
+                self.patch_application()
 
-        self.module.exit_json(changed=self.changed, kda_app=self.get_final_state())
+            self.get_final_state()
+        except:
+            return
+
+        self.module.exit_json(changed=self.changed, kda_app=self.current_state)
 
     def start_application(self):
         self.client.start_application(ApplicationName=self.module.params['name'],
@@ -76,22 +81,26 @@ class KinesisDataAnalyticsApp:
                 'ApplicationCode': self.module.params['code']
                 }
 
-        # BJF: Error handling?
         if 'logs' in self.module.params and self.module.params['logs'] is not None:
             args['CloudWatchLoggingOptions'] = self.get_log_configuration()
-
-        self.client.create_application(**args)
+        try:
+            self.client.create_application(**args)
+        except BotoCoreError as e:
+            self.module.fail_json(msg="create application failed: {}".format(e))
+            raise e
 
     def update_application(self):
-        # BJF: Error handling?
-        self.client.update_application(ApplicationName=self.module.params['name'],
-                                       CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                           'ApplicationVersionId'],
-                                       ApplicationUpdate=self.get_app_update_configuration())
+        try:
+            self.client.update_application(ApplicationName=self.module.params['name'],
+                                           CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                               'ApplicationVersionId'],
+                                           ApplicationUpdate=self.get_app_update_configuration())
+        except BotoCoreError as e:
+            self.module.fail_json(msg="update application failed: {}".format(e))
+            raise e
 
     def patch_application(self):
         self.patch_outputs()
-
         self.patch_logs()
 
     def patch_outputs(self):
@@ -100,10 +109,15 @@ class KinesisDataAnalyticsApp:
                                         i['Name'] == item['name']]
             if len(matched_describe_outputs) <= 0:
                 self.wait_till_updatable_state()
-                self.client.add_application_output(ApplicationName=self.module.params['name'],
-                                                   CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                                       'ApplicationVersionId'],
-                                                   Output=self.get_single_output_configuration(item))
+                try:
+                    self.client.add_application_output(ApplicationName=self.module.params['name'],
+                                                       CurrentApplicationVersionId=
+                                                       self.current_state['ApplicationDetail'][
+                                                           'ApplicationVersionId'],
+                                                       Output=self.get_single_output_configuration(item))
+                except BotoCoreError as e:
+                    self.module.fail_json(msg="add application output failed: {}".format(e))
+                    raise e
                 self.changed = True
 
         for item in self.current_state['ApplicationDetail']['OutputDescriptions']:
@@ -111,11 +125,15 @@ class KinesisDataAnalyticsApp:
                                        i['name'] == item['Name']]
             if len(matched_desired_outputs) <= 0:
                 self.wait_till_updatable_state()
-                self.client.delete_application_output(
-                    ApplicationName=self.module.params['name'],
-                    CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                        'ApplicationVersionId'],
-                    OutputId=item['OutputId'])
+                try:
+                    self.client.delete_application_output(
+                        ApplicationName=self.module.params['name'],
+                        CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                            'ApplicationVersionId'],
+                        OutputId=item['OutputId'])
+                except BotoCoreError as e:
+                    self.module.fail_json(msg="delete application output failed: {}".format(e))
+                    raise e
                 self.changed = True
 
     def patch_logs(self):
@@ -127,18 +145,23 @@ class KinesisDataAnalyticsApp:
                                              i['LogStreamARN'] == item['stream_arn']]
                     if len(matched_describe_logs) <= 0:
                         self.wait_till_updatable_state()
-                        self.client.add_application_cloud_watch_logging_option(
-                            ApplicationName=self.module.params['name'],
-                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                'ApplicationVersionId'],
-                            CloudWatchLoggingOption={
-                                'LogStreamARN': item['stream_arn'],
-                                'RoleARN': item['role_arn']
-                            })
+                        try:
+                            self.client.add_application_cloud_watch_logging_option(
+                                ApplicationName=self.module.params['name'],
+                                CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                    'ApplicationVersionId'],
+                                CloudWatchLoggingOption={
+                                    'LogStreamARN': item['stream_arn'],
+                                    'RoleARN': item['role_arn']
+                                })
+                        except BotoCoreError as e:
+                            self.module.fail_json(msg="add application logging failed: {}".format(e))
+                            raise e
                         self.changed = True
                 else:
                     self.wait_till_updatable_state()
-                    self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
+                    try:
+                        self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
                                                                            CurrentApplicationVersionId=
                                                                            self.current_state['ApplicationDetail'][
                                                                                'ApplicationVersionId'],
@@ -146,6 +169,9 @@ class KinesisDataAnalyticsApp:
                                                                                'LogStreamARN': item['stream_arn'],
                                                                                'RoleARN': item['role_arn']
                                                                            })
+                    except BotoCoreError as e:
+                        self.module.fail_json(msg="add application logging failed: {}".format(e))
+                        raise e
                     self.changed = True
 
         if 'CloudWatchLoggingOptionDescriptions' in self.current_state['ApplicationDetail']:
@@ -155,20 +181,28 @@ class KinesisDataAnalyticsApp:
                                             i['stream_arn'] == item['LogStreamARN']]
                     if len(matched_desired_logs) <= 0:
                         self.wait_till_updatable_state()
-                        self.client.delete_application_cloud_watch_logging_option(
+                        try:
+                            self.client.delete_application_cloud_watch_logging_option(
                             ApplicationName=self.module.params['name'],
                             CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                                 'ApplicationVersionId'],
                             CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                        except BotoCoreError as e:
+                            self.module.fail_json(msg="delete application logging failed: {}".format(e))
+                            raise e
                         self.changed = True
 
                 else:
                     self.wait_till_updatable_state()
-                    self.client.delete_application_cloud_watch_logging_option(
+                    try:
+                        self.client.delete_application_cloud_watch_logging_option(
                         ApplicationName=self.module.params['name'],
                         CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
                             'ApplicationVersionId'],
                         CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                    except BotoCoreError as e:
+                        self.module.fail_json(msg="delete application logging failed: {}".format(e))
+                        raise e
                     self.changed = True
 
     def get_current_state(self):
@@ -183,12 +217,14 @@ class KinesisDataAnalyticsApp:
                 return 'AppNotFound'
             else:
                 self.module.fail_json(msg="unable to obtain current state of application: {}".format(err))
+                raise err
 
     def get_final_state(self):
         try:
-            return self.client.describe_application(ApplicationName=self.module.params['name'])
+            self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
         except BotoCoreError as e:
             self.module.fail_json(msg="unable to obtain final state of application: {}".format(e))
+            raise e
 
     def wait_till_updatable_state(self):
         # BJF: This should be configurable with a documented default.  Giving the operator no choice is unfriendly.
@@ -200,6 +236,7 @@ class KinesisDataAnalyticsApp:
             # BJF: nitpick, but this could also be configurable
             time.sleep(5)
         self.module.fail_json(msg="wait for updatable application timeout on %s" % time.asctime())
+        raise Exception('wait for updatable state timeout')
 
     def get_input_configuration(self):
         inputs = []
@@ -597,6 +634,6 @@ def main():
     kda_app.process_request()
 
 
-#from ansible.module_utils.basic import *  # pylint: disable=W0614
+# from ansible.module_utils.basic import *  # pylint: disable=W0614
 if __name__ == '__main__':
     main()
