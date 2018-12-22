@@ -55,8 +55,6 @@ class KinesisDataAnalyticsApp:
         status = self.get_current_state()
         if status is 'AppNotFound':
             self.create_new_application()
-            # BJF: Could this be controlled by a flag?  What about dev, where I don't want to start the app post-deploy?
-            self.start_application()
             self.changed = True
         elif status is 'AppFound':
             if self.is_app_updatable_state_changed():
