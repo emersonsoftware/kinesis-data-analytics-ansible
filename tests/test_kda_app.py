@@ -86,6 +86,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 },
             ],
             'starting_position': 'LAST_STOPPED_POINT',
+            'check_timeout': 200,
+            'wait_between_check': 2
         }
         reload(kda_app)
 

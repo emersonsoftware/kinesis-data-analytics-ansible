@@ -49,6 +49,8 @@ class KinesisDataAnalyticsApp:
                     logs=dict(required=False, type='list'),
                     starting_position=dict(default='LAST_STOPPED_POINT',
                                            choices=['NOW', 'TRIM_HORIZON', 'LAST_STOPPED_POINT']),
+                    check_timeout=dict(required=False, default=300, type=int),
+                    wait_between_check=dict(required=False, default=5, type=int),
                     )
 
     def process_request(self):
@@ -227,14 +229,12 @@ class KinesisDataAnalyticsApp:
             raise e
 
     def wait_till_updatable_state(self):
-        # BJF: This should be configurable with a documented default.  Giving the operator no choice is unfriendly.
-        wait_complete = time.time() + 300
+        wait_complete = time.time() + self.module.params['check_timeout']
         while time.time() < wait_complete:
             self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
             if self.current_state['ApplicationDetail']['ApplicationStatus'] in ['READY', 'RUNNING']:
                 return
-            # BJF: nitpick, but this could also be configurable
-            time.sleep(5)
+            time.sleep(self.module.params['wait_between_check'])
         self.module.fail_json(msg="wait for updatable application timeout on %s" % time.asctime())
         raise Exception('wait for updatable state timeout')
 
