@@ -28,7 +28,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 'name_prefix': 'mayBeinMemoRyAppNaMe',
                 'parallelism': 1,
                 'kinesis': {
-                    'type': 'streams',
+                    'input_type': 'streams',
                     'resource_arn': 'some::kindaa::arn',
                     'role_arn': 'some::kindaa::arn'
                 },
@@ -36,17 +36,17 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'columns': [
                         {
                             'name': 'sensor',
-                            'type': 'VARCHAR(1)',
+                            'column_type': 'VARCHAR(1)',
                             'mapping': '$.sensor_id',
                         },
                         {
                             'name': 'temp',
-                            'type': 'NUMERIC',
+                            'column_type': 'NUMERIC',
                             'mapping': '$.temp',
                         },
                     ],
                     'format': {
-                        'type': 'JSON',
+                        'format_type': 'JSON',
                         'json_mapping_row_path': '$',
                     }
                 }
@@ -55,21 +55,21 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             'outputs': [
                 {
                     'name': 'inmemoryOutPutStream',
-                    'type': 'streams',
+                    'output_type': 'streams',
                     'resource_arn': 'some::kindaa::arn',
                     'role_arn': 'some::kindaa::arn',
                     'format_type': 'JSON',
                 },
                 {
                     'name': 'inmemoryOutPutStream1',
-                    'type': 'firehose',
+                    'output_type': 'firehose',
                     'resource_arn': 'some::kindaa1::arn',
                     'role_arn': 'some::kindaa1::arn',
                     'format_type': 'CSV',
                 },
                 {
                     'name': 'inmemoryOutPutStream2',
-                    'type': 'lambda',
+                    'output_type': 'lambda',
                     'resource_arn': 'some::kindaa2::arn',
                     'role_arn': 'some::kindaa2::arn',
                     'format_type': 'JSON',
@@ -154,7 +154,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         mock_final_describe_application_response = {
             'final': 'state'
         }
-        self.app.client.describe_application.side_effect = [ClientError(unknown_exception, ''), mock_final_describe_application_response]
+        self.app.client.describe_application.side_effect = [ClientError(unknown_exception, ''),
+                                                            mock_final_describe_application_response]
         self.app.client.create_application = mock.MagicMock()
 
         self.app.process_request()
@@ -178,8 +179,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
     def test_create_application_input_parameter_mapped_correctly(self, stream_type, pre_processor, format):
         self.setup_for_create_application()
         for input in self.app.module.params['inputs']:
-            input['kinesis']['type'] = stream_type
-            input['schema']['format']['type'] = format
+            input['kinesis']['input_type'] = stream_type
+            input['schema']['format']['format_type'] = format
             if pre_processor == 1:
                 input['pre_processor'] = {
                     'resource_arn': 'some::kindaaprepo::arn',
@@ -294,8 +295,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         new_index = 0
         old_index = 1
         for input in self.app.module.params['inputs']:
-            input['kinesis']['type'] = stream_type[new_index]
-            input['schema']['format']['type'] = format[new_index]
+            input['kinesis']['input_type'] = stream_type[new_index]
+            input['schema']['format']['format_type'] = format[new_index]
             if pre_processor[new_index] == 1:
                 input['pre_processor'] = {
                     'resource_arn': 'some::kindaaprepo::arn',
@@ -430,7 +431,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                                           logs=self.get_expected_describe_logs_configuration())
         new_output = {
             'name': 'newOutPut',
-            'type': 'streams',
+            'output_type': 'streams',
             'resource_arn': 'some::newop::arn',
             'role_arn': 'some::newop::arn',
             'format_type': 'JSON',
@@ -450,7 +451,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                                           logs=self.get_expected_describe_logs_configuration())
         new_output = {
             'name': 'newOutPut',
-            'type': 'streams',
+            'output_type': 'streams',
             'resource_arn': 'some::newop::arn',
             'role_arn': 'some::newop::arn',
             'format_type': 'JSON',
@@ -543,7 +544,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
 
         self.app.process_request()
 
-        expected_log_id = self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'][0]['CloudWatchLoggingOptionId']
+        expected_log_id = self.app.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'][0][
+            'CloudWatchLoggingOptionId']
         self.app.client.delete_application_cloud_watch_logging_option.assert_called_once_with(
             ApplicationName='testifyApp',
             CurrentApplicationVersionId=11, CloudWatchLoggingOptionId=expected_log_id)
@@ -568,7 +570,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         mock_final_describe_application_response = {
             'lol': 'lol'
         }
-        self.app.client.describe_application.side_effect = [ClientError(resource_not_found, ''), mock_final_describe_application_response]
+        self.app.client.describe_application.side_effect = [ClientError(resource_not_found, ''),
+                                                            mock_final_describe_application_response]
 
         self.app.process_request()
 
@@ -588,19 +591,19 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             },
             'InputSchema': {
                 'RecordFormat': {
-                    'RecordFormatType': item['schema']['format']['type'],
+                    'RecordFormatType': item['schema']['format']['format_type'],
                     'MappingParameters': {}
                 },
                 'RecordColumns': [],
             }
         }
 
-        if item['kinesis']['type'] == 'streams':
+        if item['kinesis']['input_type'] == 'streams':
             input_item['KinesisStreamsInput'] = {
                 'ResourceARN': item['kinesis']['resource_arn'],
                 'RoleARN': item['kinesis']['role_arn'],
             }
-        elif item['kinesis']['type'] == 'firehose':
+        elif item['kinesis']['input_type'] == 'firehose':
             input_item['KinesisFirehoseInput'] = {
                 'ResourceARN': item['kinesis']['resource_arn'],
                 'RoleARN': item['kinesis']['role_arn'],
@@ -613,11 +616,11 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 'RoleARN': item['pre_processor']['role_arn'],
             }
 
-        if item['schema']['format']['type'] == 'JSON':
+        if item['schema']['format']['format_type'] == 'JSON':
             input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
                 'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
             }
-        elif item['schema']['format']['type'] == 'CSV':
+        elif item['schema']['format']['format_type'] == 'CSV':
             input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
                 'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
                 'RecordColumnDelimiter': item['schema']['format'][
@@ -628,7 +631,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             input_item['InputSchema']['RecordColumns'].append({
                 'Mapping': column['mapping'],
                 'Name': column['name'],
-                'SqlType': column['type'],
+                'SqlType': column['column_type'],
             })
         return input_item
 
@@ -648,19 +651,19 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 },
                 'InputSchemaUpdate': {
                     'RecordFormatUpdate': {
-                        'RecordFormatType': item['schema']['format']['type'],
+                        'RecordFormatType': item['schema']['format']['format_type'],
                         'MappingParameters': {}
                     },
                     'RecordColumnUpdates': [],
                 }
             }
 
-            if item['kinesis']['type'] == 'streams':
+            if item['kinesis']['input_type'] == 'streams':
                 input_item['KinesisStreamsInputUpdate'] = {
                     'ResourceARNUpdate': item['kinesis']['resource_arn'],
                     'RoleARNUpdate': item['kinesis']['role_arn'],
                 }
-            elif item['kinesis']['type'] == 'firehose':
+            elif item['kinesis']['input_type'] == 'firehose':
                 input_item['KinesisFirehoseInputUpdate'] = {
                     'ResourceARNUpdate': item['kinesis']['resource_arn'],
                     'RoleARNUpdate': item['kinesis']['role_arn'],
@@ -673,11 +676,11 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'RoleARNUpdate': item['pre_processor']['role_arn'],
                 }
 
-            if item['schema']['format']['type'] == 'JSON':
+            if item['schema']['format']['format_type'] == 'JSON':
                 input_item['InputSchemaUpdate']['RecordFormatUpdate']['MappingParameters']['JSONMappingParameters'] = {
                     'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
                 }
-            elif item['schema']['format']['type'] == 'CSV':
+            elif item['schema']['format']['format_type'] == 'CSV':
                 input_item['InputSchemaUpdate']['RecordFormatUpdate']['MappingParameters']['CSVMappingParameters'] = {
                     'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
                     'RecordColumnDelimiter': item['schema']['format'][
@@ -688,7 +691,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 input_item['InputSchemaUpdate']['RecordColumnUpdates'].append({
                     'Mapping': column['mapping'],
                     'Name': column['name'],
-                    'SqlType': column['type'],
+                    'SqlType': column['column_type'],
                 })
             expected.append(input_item)
 
@@ -711,17 +714,17 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'RecordFormatType': item['format_type']
                 }
             }
-            if item['type'] == 'streams':
+            if item['output_type'] == 'streams':
                 output['KinesisStreamsOutputUpdate'] = {
                     'ResourceARNUpdate': item['resource_arn'],
                     'RoleARNUpdate': item['role_arn'],
                 }
-            elif item['type'] == 'firehose':
+            elif item['output_type'] == 'firehose':
                 output['KinesisFirehoseOutputUpdate'] = {
                     'ResourceARNUpdate': item['resource_arn'],
                     'RoleARNUpdate': item['role_arn'],
                 }
-            elif item['type'] == 'lambda':
+            elif item['output_type'] == 'lambda':
                 output['LambdaOutputUpdate'] = {
                     'ResourceARNUpdate': item['resource_arn'],
                     'RoleARNUpdate': item['role_arn'],
@@ -763,17 +766,17 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'RecordFormatType': item['format_type']
                 }
             }
-            if item['type'] == 'streams':
+            if item['output_type'] == 'streams':
                 output['KinesisStreamsOutputDescription'] = {
                     'ResourceARN': item['resource_arn'],
                     'RoleARN': item['role_arn'],
                 }
-            elif item['type'] == 'firehose':
+            elif item['output_type'] == 'firehose':
                 output['KinesisFirehoseOutputDescription'] = {
                     'ResourceARN': item['resource_arn'],
                     'RoleARN': item['role_arn'],
                 }
-            elif item['type'] == 'lambda':
+            elif item['output_type'] == 'lambda':
                 output['LambdaOutputDescription'] = {
                     'ResourceARN': item['resource_arn'],
                     'RoleARN': item['role_arn'],
@@ -810,19 +813,19 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 },
                 'InputSchema': {
                     'RecordFormat': {
-                        'RecordFormatType': item['schema']['format']['type'],
+                        'RecordFormatType': item['schema']['format']['format_type'],
                         'MappingParameters': {}
                     },
                     'RecordColumns': [],
                 }
             }
 
-            if item['kinesis']['type'] == 'streams':
+            if item['kinesis']['input_type'] == 'streams':
                 input_item['KinesisStreamsInputDescription'] = {
                     'ResourceARN': item['kinesis']['resource_arn'],
                     'RoleARN': item['kinesis']['role_arn'],
                 }
-            elif item['kinesis']['type'] == 'firehose':
+            elif item['kinesis']['input_type'] == 'firehose':
                 input_item['KinesisFirehoseInputDescription'] = {
                     'ResourceARN': item['kinesis']['resource_arn'],
                     'RoleARN': item['kinesis']['role_arn'],
@@ -835,11 +838,11 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     'RoleARN': item['pre_processor']['role_arn'],
                 }
 
-            if item['schema']['format']['type'] == 'JSON':
+            if item['schema']['format']['format_type'] == 'JSON':
                 input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
                     'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
                 }
-            elif item['schema']['format']['type'] == 'CSV':
+            elif item['schema']['format']['format_type'] == 'CSV':
                 input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
                     'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
                     'RecordColumnDelimiter': item['schema']['format'][
@@ -850,7 +853,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 input_item['InputSchema']['RecordColumns'].append({
                     'Mapping': column['mapping'],
                     'Name': column['name'],
-                    'SqlType': column['type'],
+                    'SqlType': column['column_type'],
                 })
             expected.append(input_item)
 
@@ -871,23 +874,23 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 'RecordFormatType': item['format_type']
             }
         }
-        if item['type'] == 'streams':
+        if item['output_type'] == 'streams':
             output['KinesisStreamsOutput'] = {
                 'ResourceARN': item['resource_arn'],
                 'RoleARN': item['role_arn'],
             }
-        elif item['type'] == 'firehose':
+        elif item['output_type'] == 'firehose':
             output['KinesisFirehoseOutput'] = {
                 'ResourceARN': item['resource_arn'],
                 'RoleARN': item['role_arn'],
             }
-        elif item['type'] == 'lambda':
+        elif item['output_type'] == 'lambda':
             output['LambdaOutput'] = {
                 'ResourceARN': item['resource_arn'],
                 'RoleARN': item['role_arn'],
             }
 
-        return  output
+        return output
 
     def get_expected_log_configuration(self):
         expected = []
@@ -929,7 +932,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 return True
             describe_output = matched_describe_outputs[0]
 
-            if output['type'] == 'streams':
+            if output['output_type'] == 'streams':
                 if 'KinesisStreamsOutputDescription' not in describe_output:
                     return True
                 if output['resource_arn'] != describe_output['KinesisStreamsOutputDescription']['ResourceARN']:
@@ -937,7 +940,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 if output['role_arn'] != describe_output['KinesisStreamsOutputDescription']['RoleARN']:
                     return True
 
-            if output['type'] == 'firehose':
+            if output['output_type'] == 'firehose':
                 if 'KinesisFirehoseOutputDescription' not in describe_output:
                     return True
                 if output['resource_arn'] != describe_output['KinesisFirehoseOutputDescription']['ResourceARN']:
@@ -945,7 +948,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 if output['role_arn'] != describe_output['KinesisFirehoseOutputDescription']['RoleARN']:
                     return True
 
-            if output['type'] == 'lambda':
+            if output['output_type'] == 'lambda':
                 if 'LambdaOutputDescription' not in describe_output:
                     return True
                 if output['resource_arn'] != describe_output['LambdaOutputDescription']['ResourceARN']:
@@ -992,16 +995,17 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 return True
             describe_input = matched_describe_inputs[0]
 
-            if input['schema']['format']['type'] != describe_input['InputSchema']['RecordFormat']['RecordFormatType']:
+            if input['schema']['format']['format_type'] != describe_input['InputSchema']['RecordFormat'][
+                'RecordFormatType']:
                 return True
 
-            if input['schema']['format']['type'] == 'JSON':
+            if input['schema']['format']['format_type'] == 'JSON':
                 if input['schema']['format']['json_mapping_row_path'] != \
                         describe_input['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'][
                             'RecordRowPath']:
                     return True
 
-            if input['schema']['format']['type'] == 'CSV':
+            if input['schema']['format']['format_type'] == 'CSV':
                 if input['schema']['format']['csv_mapping_row_delimiter'] != \
                         describe_input['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'][
                             'RecordRowDelimiter']:
@@ -1020,13 +1024,13 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                 if len(matched_describe_cols) != 1:
                     return True
                 describe_col = matched_describe_cols[0]
-                if describe_col['SqlType'] != col['type'] or describe_col['Mapping'] != col['mapping']:
+                if describe_col['SqlType'] != col['column_type'] or describe_col['Mapping'] != col['mapping']:
                     return True
 
             if input['parallelism'] != describe_input['InputParallelism']['Count']:
                 return True
 
-            if input['kinesis']['type'] == 'streams':
+            if input['kinesis']['input_type'] == 'streams':
                 if 'KinesisStreamsInputDescription' in describe_input:
                     if input['kinesis']['resource_arn'] != describe_input['KinesisStreamsInputDescription'][
                         'ResourceARN']:
@@ -1034,7 +1038,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     if input['kinesis']['role_arn'] != describe_input['KinesisStreamsInputDescription']['RoleARN']:
                         return True
 
-            if input['kinesis']['type'] == 'firehose':
+            if input['kinesis']['input_type'] == 'firehose':
                 if 'KinesisFirehoseInputDescription' in describe_input:
                     if input['kinesis']['resource_arn'] != describe_input['KinesisFirehoseInputDescription'][
                         'ResourceARN']:
@@ -1076,7 +1080,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         mock_final_describe_application_response = {
             'final': 'state'
         }
-        self.app.client.describe_application.side_effect = [ClientError(resource_not_found, ''), mock_final_describe_application_response]
+        self.app.client.describe_application.side_effect = [ClientError(resource_not_found, ''),
+                                                            mock_final_describe_application_response]
         self.app.client.create_application = mock.MagicMock()
         self.app.client.start_application = mock.MagicMock()
 

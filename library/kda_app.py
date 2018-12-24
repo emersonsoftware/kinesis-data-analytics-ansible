@@ -210,14 +210,15 @@ class KinesisDataAnalyticsApp:
                 else:
                     self.wait_till_updatable_state()
                     try:
-                        self.client.add_application_cloud_watch_logging_option(ApplicationName=self.module.params['name'],
-                                                                           CurrentApplicationVersionId=
-                                                                           self.current_state['ApplicationDetail'][
-                                                                               'ApplicationVersionId'],
-                                                                           CloudWatchLoggingOption={
-                                                                               'LogStreamARN': item['stream_arn'],
-                                                                               'RoleARN': item['role_arn']
-                                                                           })
+                        self.client.add_application_cloud_watch_logging_option(
+                            ApplicationName=self.module.params['name'],
+                            CurrentApplicationVersionId=
+                            self.current_state['ApplicationDetail'][
+                                'ApplicationVersionId'],
+                            CloudWatchLoggingOption={
+                                'LogStreamARN': item['stream_arn'],
+                                'RoleARN': item['role_arn']
+                            })
                     except BotoCoreError as e:
                         self.module.fail_json(msg="add application logging failed: {}".format(e))
                         raise e
@@ -232,10 +233,10 @@ class KinesisDataAnalyticsApp:
                         self.wait_till_updatable_state()
                         try:
                             self.client.delete_application_cloud_watch_logging_option(
-                            ApplicationName=self.module.params['name'],
-                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                'ApplicationVersionId'],
-                            CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                                ApplicationName=self.module.params['name'],
+                                CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                    'ApplicationVersionId'],
+                                CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
                         except BotoCoreError as e:
                             self.module.fail_json(msg="delete application logging failed: {}".format(e))
                             raise e
@@ -245,10 +246,10 @@ class KinesisDataAnalyticsApp:
                     self.wait_till_updatable_state()
                     try:
                         self.client.delete_application_cloud_watch_logging_option(
-                        ApplicationName=self.module.params['name'],
-                        CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                            'ApplicationVersionId'],
-                        CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                            ApplicationName=self.module.params['name'],
+                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
+                                'ApplicationVersionId'],
+                            CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
                     except BotoCoreError as e:
                         self.module.fail_json(msg="delete application logging failed: {}".format(e))
                         raise e
@@ -305,19 +306,19 @@ class KinesisDataAnalyticsApp:
             },
             'InputSchema': {
                 'RecordFormat': {
-                    'RecordFormatType': item['schema']['format']['type'],
+                    'RecordFormatType': item['schema']['format']['format_type'],
                     'MappingParameters': {}
                 },
                 'RecordColumns': [],
             }
         }
 
-        if item['kinesis']['type'] == 'streams':
+        if item['kinesis']['input_type'] == 'streams':
             input_item['KinesisStreamsInput'] = {
                 'ResourceARN': item['kinesis']['resource_arn'],
                 'RoleARN': item['kinesis']['role_arn'],
             }
-        elif item['kinesis']['type'] == 'firehose':
+        elif item['kinesis']['input_type'] == 'firehose':
             input_item['KinesisFirehoseInput'] = {
                 'ResourceARN': item['kinesis']['resource_arn'],
                 'RoleARN': item['kinesis']['role_arn'],
@@ -330,11 +331,11 @@ class KinesisDataAnalyticsApp:
                 'RoleARN': item['pre_processor']['role_arn'],
             }
 
-        if item['schema']['format']['type'] == 'JSON':
+        if item['schema']['format']['format_type'] == 'JSON':
             input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
                 'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
             }
-        elif item['schema']['format']['type'] == 'CSV':
+        elif item['schema']['format']['format_type'] == 'CSV':
             input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
                 'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
                 'RecordColumnDelimiter': item['schema']['format'][
@@ -345,7 +346,7 @@ class KinesisDataAnalyticsApp:
             input_item['InputSchema']['RecordColumns'].append({
                 'Mapping': column['mapping'],
                 'Name': column['name'],
-                'SqlType': column['type'],
+                'SqlType': column['column_type'],
             })
         return input_item
 
@@ -365,17 +366,17 @@ class KinesisDataAnalyticsApp:
                 'RecordFormatType': item['format_type']
             }
         }
-        if item['type'] == 'streams':
+        if item['output_type'] == 'streams':
             output['KinesisStreamsOutput'] = {
                 'ResourceARN': item['resource_arn'],
                 'RoleARN': item['role_arn'],
             }
-        elif item['type'] == 'firehose':
+        elif item['output_type'] == 'firehose':
             output['KinesisFirehoseOutput'] = {
                 'ResourceARN': item['resource_arn'],
                 'RoleARN': item['role_arn'],
             }
-        elif item['type'] == 'lambda':
+        elif item['output_type'] == 'lambda':
             output['LambdaOutput'] = {
                 'ResourceARN': item['resource_arn'],
                 'RoleARN': item['role_arn'],
@@ -437,7 +438,7 @@ class KinesisDataAnalyticsApp:
                 continue
             describe_output = matched_describe_outputs[0]
 
-            if output['type'] == 'streams':
+            if output['output_type'] == 'streams':
                 if 'KinesisStreamsOutputDescription' not in describe_output:
                     return True
                 if output['resource_arn'] != describe_output['KinesisStreamsOutputDescription']['ResourceARN']:
@@ -445,7 +446,7 @@ class KinesisDataAnalyticsApp:
                 if output['role_arn'] != describe_output['KinesisStreamsOutputDescription']['RoleARN']:
                     return True
 
-            if output['type'] == 'firehose':
+            if output['output_type'] == 'firehose':
                 if 'KinesisFirehoseOutputDescription' not in describe_output:
                     return True
                 if output['resource_arn'] != describe_output['KinesisFirehoseOutputDescription']['ResourceARN']:
@@ -453,7 +454,7 @@ class KinesisDataAnalyticsApp:
                 if output['role_arn'] != describe_output['KinesisFirehoseOutputDescription']['RoleARN']:
                     return True
 
-            if output['type'] == 'lambda':
+            if output['output_type'] == 'lambda':
                 if 'LambdaOutputDescription' not in describe_output:
                     return True
                 if output['resource_arn'] != describe_output['LambdaOutputDescription']['ResourceARN']:
@@ -474,16 +475,17 @@ class KinesisDataAnalyticsApp:
                 return True
             describe_input = matched_describe_inputs[0]
 
-            if input['schema']['format']['type'] != describe_input['InputSchema']['RecordFormat']['RecordFormatType']:
+            if input['schema']['format']['format_type'] != describe_input['InputSchema']['RecordFormat'][
+                'RecordFormatType']:
                 return True
 
-            if input['schema']['format']['type'] == 'JSON':
+            if input['schema']['format']['format_type'] == 'JSON':
                 if input['schema']['format']['json_mapping_row_path'] != \
                         describe_input['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'][
                             'RecordRowPath']:
                     return True
 
-            if input['schema']['format']['type'] == 'CSV':
+            if input['schema']['format']['format_type'] == 'CSV':
                 if input['schema']['format']['csv_mapping_row_delimiter'] != \
                         describe_input['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'][
                             'RecordRowDelimiter']:
@@ -502,13 +504,13 @@ class KinesisDataAnalyticsApp:
                 if len(matched_describe_cols) != 1:
                     return True
                 describe_col = matched_describe_cols[0]
-                if describe_col['SqlType'] != col['type'] or describe_col['Mapping'] != col['mapping']:
+                if describe_col['SqlType'] != col['column_type'] or describe_col['Mapping'] != col['mapping']:
                     return True
 
             if input['parallelism'] != describe_input['InputParallelism']['Count']:
                 return True
 
-            if input['kinesis']['type'] == 'streams':
+            if input['kinesis']['input_type'] == 'streams':
                 if 'KinesisStreamsInputDescription' in describe_input:
                     if input['kinesis']['resource_arn'] != describe_input['KinesisStreamsInputDescription'][
                         'ResourceARN']:
@@ -516,7 +518,7 @@ class KinesisDataAnalyticsApp:
                     if input['kinesis']['role_arn'] != describe_input['KinesisStreamsInputDescription']['RoleARN']:
                         return True
 
-            if input['kinesis']['type'] == 'firehose':
+            if input['kinesis']['input_type'] == 'firehose':
                 if 'KinesisFirehoseInputDescription' in describe_input:
                     if input['kinesis']['resource_arn'] != describe_input['KinesisFirehoseInputDescription'][
                         'ResourceARN']:
@@ -568,19 +570,19 @@ class KinesisDataAnalyticsApp:
                 },
                 'InputSchemaUpdate': {
                     'RecordFormatUpdate': {
-                        'RecordFormatType': item['schema']['format']['type'],
+                        'RecordFormatType': item['schema']['format']['format_type'],
                         'MappingParameters': {}
                     },
                     'RecordColumnUpdates': [],
                 }
             }
 
-            if item['kinesis']['type'] == 'streams':
+            if item['kinesis']['input_type'] == 'streams':
                 input_item['KinesisStreamsInputUpdate'] = {
                     'ResourceARNUpdate': item['kinesis']['resource_arn'],
                     'RoleARNUpdate': item['kinesis']['role_arn'],
                 }
-            elif item['kinesis']['type'] == 'firehose':
+            elif item['kinesis']['input_type'] == 'firehose':
                 input_item['KinesisFirehoseInputUpdate'] = {
                     'ResourceARNUpdate': item['kinesis']['resource_arn'],
                     'RoleARNUpdate': item['kinesis']['role_arn'],
@@ -593,11 +595,11 @@ class KinesisDataAnalyticsApp:
                     'RoleARNUpdate': item['pre_processor']['role_arn'],
                 }
 
-            if item['schema']['format']['type'] == 'JSON':
+            if item['schema']['format']['format_type'] == 'JSON':
                 input_item['InputSchemaUpdate']['RecordFormatUpdate']['MappingParameters']['JSONMappingParameters'] = {
                     'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
                 }
-            elif item['schema']['format']['type'] == 'CSV':
+            elif item['schema']['format']['format_type'] == 'CSV':
                 input_item['InputSchemaUpdate']['RecordFormatUpdate']['MappingParameters']['CSVMappingParameters'] = {
                     'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
                     'RecordColumnDelimiter': item['schema']['format'][
@@ -608,7 +610,7 @@ class KinesisDataAnalyticsApp:
                 input_item['InputSchemaUpdate']['RecordColumnUpdates'].append({
                     'Mapping': column['mapping'],
                     'Name': column['name'],
-                    'SqlType': column['type'],
+                    'SqlType': column['column_type'],
                 })
             expected.append(input_item)
 
@@ -631,17 +633,17 @@ class KinesisDataAnalyticsApp:
                     'RecordFormatType': item['format_type']
                 }
             }
-            if item['type'] == 'streams':
+            if item['output_type'] == 'streams':
                 output['KinesisStreamsOutputUpdate'] = {
                     'ResourceARNUpdate': item['resource_arn'],
                     'RoleARNUpdate': item['role_arn'],
                 }
-            elif item['type'] == 'firehose':
+            elif item['output_type'] == 'firehose':
                 output['KinesisFirehoseOutputUpdate'] = {
                     'ResourceARNUpdate': item['resource_arn'],
                     'RoleARNUpdate': item['role_arn'],
                 }
-            elif item['type'] == 'lambda':
+            elif item['output_type'] == 'lambda':
                 output['LambdaOutputUpdate'] = {
                     'ResourceARNUpdate': item['resource_arn'],
                     'RoleARNUpdate': item['role_arn'],
