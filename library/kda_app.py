@@ -95,21 +95,21 @@ class KinesisDataAnalyticsApp:
                                            ),
                     check_timeout=dict(required=False, default=300, type="int"),
                     wait_between_check=dict(required=False, default=5, type="int"),
+                    state=dict(default="present", choices=["present", "absent"]),
                     )
 
     def process_request(self):
         try:
-            status = self.get_current_state()
-            if status is "AppNotFound":
-                self.create_new_application()
-                self.changed = True
-            elif status is "AppFound":
-                if self.is_app_updatable_state_changed():
-                    self.update_application()
-                    self.changed = True
-                self.patch_application()
+            current_app_state = self.get_current_state()
+            desired_app_state = self.safe_get(self.module.params, "state", "present")
 
-            self.get_final_state()
+            if current_app_state == desired_app_state == "present":
+                self.achieve_present_state(current_app_state)
+            elif current_app_state != desired_app_state and desired_app_state == "present":
+                self.achieve_present_state(current_app_state)
+            elif current_app_state != desired_app_state and desired_app_state == "absent":
+                self.achieve_absent_state()
+
         except (BotoCoreError, ClientError):
             return
         except Exception as e:
@@ -117,6 +117,27 @@ class KinesisDataAnalyticsApp:
             return
 
         self.module.exit_json(changed=self.changed, kda_app=self.current_state)
+
+    def achieve_present_state(self, current_app_state):
+        if current_app_state is "absent":
+            self.create_new_application()
+            self.changed = True
+        elif current_app_state is "present":
+            if self.is_app_updatable_state_changed():
+                self.update_application()
+                self.changed = True
+            self.patch_application()
+
+        self.get_final_state()
+
+    def achieve_absent_state(self):
+        try:
+            self.client.delete_application(ApplicationName=self.safe_get(self.module.params, "name", None),
+                                           CreateTimestamp=self.safe_get(self.current_state,
+                                                                         "ApplicationDetail.CreateTimestamp", None))
+        except BotoCoreError as e:
+            self.module.fail_json(msg="delete application failed: {}".format(e))
+            raise e
 
     def start_application(self):
         self.client.start_application(ApplicationName=self.safe_get(self.module.params, "name", None),
@@ -265,10 +286,10 @@ class KinesisDataAnalyticsApp:
         try:
             self.current_state = self.client.describe_application(
                 ApplicationName=self.safe_get(self.module.params, "name", None))
-            return "AppFound"
+            return "present"
         except ClientError as err:
             if self.safe_get(err.response, "Error.Code", "") == "ResourceNotFoundException":
-                return "AppNotFound"
+                return "absent"
             else:
                 self.module.fail_json(msg="unable to obtain current state of application: {}".format(err))
                 raise err
@@ -571,7 +592,8 @@ class KinesisDataAnalyticsApp:
 
         for log in self.safe_get(self.module.params, "logs", []):
             matched_describe_logs = [i for i in
-                                     self.safe_get(self.current_state, "ApplicationDetail.CloudWatchLoggingOptionDescriptions", []) if
+                                     self.safe_get(self.current_state,
+                                                   "ApplicationDetail.CloudWatchLoggingOptionDescriptions", []) if
                                      self.safe_get(i, "LogStreamARN", "") == self.safe_get(log, "stream_arn", "")]
             if len(matched_describe_logs) != 1:
                 continue
@@ -647,7 +669,8 @@ class KinesisDataAnalyticsApp:
         expected = []
 
         for item in self.safe_get(self.module.params, "outputs", []):
-            matched_describe_outputs = [i for i in self.safe_get(self.current_state, "ApplicationDetail.OutputDescriptions", []) if
+            matched_describe_outputs = [i for i in
+                                        self.safe_get(self.current_state, "ApplicationDetail.OutputDescriptions", []) if
                                         self.safe_get(i, "Name", "") == self.safe_get(item, "name", "")]
 
             if len(matched_describe_outputs) != 1:
@@ -685,7 +708,8 @@ class KinesisDataAnalyticsApp:
 
         for item in self.safe_get(self.module.params, "logs", []):
             matched_describe_logs = [i for i in
-                                     self.safe_get(self.current_state, "ApplicationDetail.CloudWatchLoggingOptionDescriptions", []) if
+                                     self.safe_get(self.current_state,
+                                                   "ApplicationDetail.CloudWatchLoggingOptionDescriptions", []) if
                                      self.safe_get(i, "LogStreamARN", "") == self.safe_get(item, "stream_arn", "")]
 
             if len(matched_describe_logs) != 1:

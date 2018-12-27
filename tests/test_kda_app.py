@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from ddt import ddt, data, unpack
 import unittest
 from botocore.exceptions import BotoCoreError
+import datetime
 
 
 @ddt
@@ -87,7 +88,8 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             ],
             'starting_position': 'LAST_STOPPED_POINT',
             'check_timeout': 200,
-            'wait_between_check': 2
+            'wait_between_check': 2,
+            'state': 'present'
         }
         reload(kda_app)
 
@@ -576,6 +578,45 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.process_request()
 
         self.module.exit_json.assert_called_once_with(changed=True, kda_app=mock_final_describe_application_response)
+
+    def test_delete_application_gets_called_when_desired_state_absent_and_current_state_is_present(self):
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        self.app.module.params["state"] = "absent"
+
+        self.app.process_request()
+
+        self.app.client.delete_application.assert_called_once_with(
+            ApplicationName='testifyApp',
+            CreateTimestamp=datetime.datetime(2001, 1, 1))
+
+    def test_delete_application_not_called_when_desired_state_absent_and_current_state_is_absent(self):
+        self.setup_for_create_application()
+
+        self.app.module.params["state"] = "absent"
+
+        self.app.process_request()
+
+        self.app.client.delete_application.assert_not_called()
+        self.module.exit_json.assert_called_once_with(changed=False, kda_app=None)
+
+    def test_delete_application_call_fails_provide_friendly_message(self):
+        self.setup_for_update_application(app_code=self.app.module.params['code'],
+                                          inputs=self.get_expected_describe_input_configuration(),
+                                          outputs=self.get_expected_describe_output_configuration(),
+                                          logs=self.get_expected_describe_logs_configuration())
+
+        self.app.client.delete_application.side_effect = BotoCoreError
+        self.app.module.params["state"] = "absent"
+
+        self.app.process_request()
+
+        self.app.client.delete_application.assert_called_once()
+        self.assert_error_message('delete application failed:')
+
 
     def get_expected_input_configuration(self):
         expected = []
@@ -1090,6 +1131,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
             'ApplicationDetail': {
                 'ApplicationVersionId': 11,
                 'ApplicationStatus': 'RUNNING',
+                'CreateTimestamp': datetime.datetime(2001, 1, 1)
             }
         }
 
