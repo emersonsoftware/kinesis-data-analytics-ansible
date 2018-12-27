@@ -8,6 +8,7 @@ try:
     import boto3
     import boto
     from botocore.exceptions import BotoCoreError
+    from botocore.exceptions import ClientError
 
     HAS_BOTO3 = True
 except ImportError:
@@ -109,7 +110,10 @@ class KinesisDataAnalyticsApp:
                 self.patch_application()
 
             self.get_final_state()
-        except:
+        except (BotoCoreError, ClientError):
+            return
+        except Exception as e:
+            self.module.fail_json(msg="unknown error: {}".format(e))
             return
 
         self.module.exit_json(changed=self.changed, kda_app=self.current_state)
@@ -258,7 +262,6 @@ class KinesisDataAnalyticsApp:
                     self.changed = True
 
     def get_current_state(self):
-        from botocore.exceptions import ClientError
         try:
             self.current_state = self.client.describe_application(
                 ApplicationName=self.safe_get(self.module.params, "name", None))
