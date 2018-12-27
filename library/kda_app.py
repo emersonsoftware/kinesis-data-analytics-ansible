@@ -14,6 +14,13 @@ try:
 except ImportError:
     HAS_BOTO3 = False
 
+FIREHOSE = "firehose"
+STREAMS = "streams"
+LAMBDA = "lambda"
+FORMAT_JSON = "JSON"
+FORMAT_CSV = "CSV"
+STATE_PRESENT = "present"
+STATE_ABSENT = "absent"
 
 # BJF: Top-level thoughts:
 #      1: There is typically a "flower-box" style comment at the top where you claim authorship and document your license (needed for open sourcing)
@@ -41,8 +48,8 @@ class KinesisDataAnalyticsApp:
                         parallelism=dict(required=False, default=1, type="int"),
                         kinesis=dict(required=True,
                                      input_type=dict(required=True,
-                                                     default="streams",
-                                                     choices=["streams", "firehose"],
+                                                     default=STREAMS,
+                                                     choices=[STREAMS, FIREHOSE],
                                                      type="str"
                                                      ),
                                      resource_arn=dict(required=True, type="str"),
@@ -61,7 +68,7 @@ class KinesisDataAnalyticsApp:
                                                  ),
                                     format=dict(required=True,
                                                 format_type=dict(required=True,
-                                                                 choices=["JSON", "CSV"],
+                                                                 choices=[FORMAT_JSON, FORMAT_CSV],
                                                                  type="str",
                                                                  ),
                                                 json_mapping_row_path=dict(required=False, type="str"),
@@ -74,13 +81,13 @@ class KinesisDataAnalyticsApp:
                                  type="list",
                                  name=dict(required=True, type="str"),
                                  output_type=dict(required=True,
-                                                  options=["streams", "firehose", "lambda"],
+                                                  options=[STREAMS, FIREHOSE, LAMBDA],
                                                   type="str",
                                                   ),
                                  resource_arn=dict(required=True, type="str"),
                                  role_arn=dict(required=True, type="str"),
                                  format_type=dict(required=True,
-                                                  options=["JSON", "CSV"],
+                                                  options=[FORMAT_JSON, FORMAT_CSV],
                                                   type="str"
                                                   ),
                                  ),
@@ -91,19 +98,19 @@ class KinesisDataAnalyticsApp:
                               ),
                     check_timeout=dict(required=False, default=300, type="int"),
                     wait_between_check=dict(required=False, default=5, type="int"),
-                    state=dict(default="present", choices=["present", "absent"]),
+                    state=dict(default=STATE_PRESENT, choices=[STATE_PRESENT, STATE_ABSENT]),
                     )
 
     def process_request(self):
         try:
             current_app_state = self.get_current_state()
-            desired_app_state = self.safe_get(self.module.params, "state", "present")
+            desired_app_state = self.safe_get(self.module.params, "state", STATE_PRESENT)
 
-            if current_app_state == desired_app_state == "present":
+            if current_app_state == desired_app_state == STATE_PRESENT:
                 self.achieve_present_state(current_app_state)
-            elif current_app_state != desired_app_state and desired_app_state == "present":
+            elif current_app_state != desired_app_state and desired_app_state == STATE_PRESENT:
                 self.achieve_present_state(current_app_state)
-            elif current_app_state != desired_app_state and desired_app_state == "absent":
+            elif current_app_state != desired_app_state and desired_app_state == STATE_ABSENT:
                 self.achieve_absent_state()
 
         except (BotoCoreError, ClientError):
@@ -115,10 +122,10 @@ class KinesisDataAnalyticsApp:
         self.module.exit_json(changed=self.changed, kda_app=self.current_state)
 
     def achieve_present_state(self, current_app_state):
-        if current_app_state is "absent":
+        if current_app_state is STATE_ABSENT:
             self.create_new_application()
             self.changed = True
-        elif current_app_state is "present":
+        elif current_app_state is STATE_PRESENT:
             if self.is_app_updatable_state_changed():
                 self.update_application()
                 self.changed = True
@@ -278,10 +285,10 @@ class KinesisDataAnalyticsApp:
         try:
             self.current_state = self.client.describe_application(
                 ApplicationName=self.safe_get(self.module.params, "name", None))
-            return "present"
+            return STATE_PRESENT
         except ClientError as err:
             if self.safe_get(err.response, "Error.Code", "") == "ResourceNotFoundException":
-                return "absent"
+                return STATE_ABSENT
             else:
                 self.module.fail_json(msg="unable to obtain current state of application: {}".format(err))
                 raise err
@@ -327,12 +334,12 @@ class KinesisDataAnalyticsApp:
             }
         }
 
-        if self.safe_get(item, "kinesis.input_type", "") == "streams":
+        if self.safe_get(item, "kinesis.input_type", "") == STREAMS:
             input_item["KinesisStreamsInput"] = {
                 "ResourceARN": self.safe_get(item, "kinesis.resource_arn", ""),
                 "RoleARN": self.safe_get(item, "kinesis.role_arn", ""),
             }
-        elif self.safe_get(item, "kinesis.input_type", "") == "firehose":
+        elif self.safe_get(item, "kinesis.input_type", "") == FIREHOSE:
             input_item["KinesisFirehoseInput"] = {
                 "ResourceARN": self.safe_get(item, "kinesis.resource_arn", ""),
                 "RoleARN": self.safe_get(item, "kinesis.role_arn", ""),
@@ -345,11 +352,11 @@ class KinesisDataAnalyticsApp:
                 "RoleARN": self.safe_get(item, "pre_processor.role_arn", ""),
             }
 
-        if self.safe_get(item, "schema.format.format_type", "") == "JSON":
+        if self.safe_get(item, "schema.format.format_type", "") == FORMAT_JSON:
             input_item["InputSchema"]["RecordFormat"]["MappingParameters"]["JSONMappingParameters"] = {
                 "RecordRowPath": self.safe_get(item, "schema.format.json_mapping_row_path", ""),
             }
-        elif self.safe_get(item, "schema.format.format_type", "") == "CSV":
+        elif self.safe_get(item, "schema.format.format_type", "") == FORMAT_CSV:
             input_item["InputSchema"]["RecordFormat"]["MappingParameters"]["CSVMappingParameters"] = {
                 "RecordRowDelimiter": self.safe_get(item, "schema.format.csv_mapping_row_delimiter", ""),
                 "RecordColumnDelimiter": self.safe_get(item, "schema.format.csv_mapping_column_delimiter", ""),
@@ -378,17 +385,17 @@ class KinesisDataAnalyticsApp:
                 "RecordFormatType": self.safe_get(item, "format_type", "")
             }
         }
-        if self.safe_get(item, "output_type", "") == "streams":
+        if self.safe_get(item, "output_type", "") == STREAMS:
             output["KinesisStreamsOutput"] = {
                 "ResourceARN": self.safe_get(item, "resource_arn", ""),
                 "RoleARN": self.safe_get(item, "role_arn", ""),
             }
-        elif self.safe_get(item, "output_type", "") == "firehose":
+        elif self.safe_get(item, "output_type", "") == FIREHOSE:
             output["KinesisFirehoseOutput"] = {
                 "ResourceARN": self.safe_get(item, "resource_arn", ""),
                 "RoleARN": self.safe_get(item, "role_arn", ""),
             }
-        elif self.safe_get(item, "output_type", "") == "lambda":
+        elif self.safe_get(item, "output_type", "") == LAMBDA:
             output["LambdaOutput"] = {
                 "ResourceARN": self.safe_get(item, "resource_arn", ""),
                 "RoleARN": self.safe_get(item, "role_arn", ""),
@@ -441,7 +448,7 @@ class KinesisDataAnalyticsApp:
 
             output_type = self.safe_get(output, "output_type", "")
 
-            if output_type == "streams":
+            if output_type == STREAMS:
                 if "KinesisStreamsOutputDescription" not in describe_output:
                     return True
                 if output["resource_arn"] != self.safe_get(describe_output,
@@ -450,7 +457,7 @@ class KinesisDataAnalyticsApp:
                 if output["role_arn"] != self.safe_get(describe_output, "KinesisStreamsOutputDescription.RoleARN", ""):
                     return True
 
-            if output_type == "firehose":
+            if output_type == FIREHOSE:
                 if "KinesisFirehoseOutputDescription" not in describe_output:
                     return True
                 if output["resource_arn"] != self.safe_get(describe_output,
@@ -459,7 +466,7 @@ class KinesisDataAnalyticsApp:
                 if output["role_arn"] != self.safe_get(describe_output, "KinesisFirehoseOutputDescription.RoleARN", ""):
                     return True
 
-            if output_type == "lambda":
+            if output_type == LAMBDA:
                 if "LambdaOutputDescription" not in describe_output:
                     return True
                 if output["resource_arn"] != self.safe_get(describe_output, "LambdaOutputDescription.ResourceARN", ""):
@@ -487,14 +494,14 @@ class KinesisDataAnalyticsApp:
                                                                                       ""):
                 return True
 
-            if self.safe_get(input, "schema.format.format_type", "") == "JSON":
+            if self.safe_get(input, "schema.format.format_type", "") == FORMAT_JSON:
                 if self.safe_get(input, "schema.format.json_mapping_row_path", "") != \
                         self.safe_get(describe_input,
                                       "InputSchema.RecordFormat.MappingParameters.JSONMappingParameters.RecordRowPath",
                                       ""):
                     return True
 
-            if self.safe_get(input, "schema.format.format_type", "") == "CSV":
+            if self.safe_get(input, "schema.format.format_type", "") == FORMAT_CSV:
                 if self.safe_get(input, "schema.format.csv_mapping_row_delimiter", "") != \
                         self.safe_get(describe_input,
                                       "InputSchema.RecordFormat.MappingParameters.CSVMappingParameters.RecordRowDelimiter",
@@ -525,7 +532,7 @@ class KinesisDataAnalyticsApp:
                 return True
 
             input_type = self.safe_get(input, "kinesis.input_type", "")
-            if input_type == "streams":
+            if input_type == STREAMS:
                 if "KinesisStreamsInputDescription" in describe_input:
                     if self.safe_get(input, "kinesis.resource_arn", "") != self.safe_get(describe_input,
                                                                                          "KinesisStreamsInputDescription.ResourceARN",
@@ -536,7 +543,7 @@ class KinesisDataAnalyticsApp:
                                                                                      ""):
                         return True
 
-            if input_type == "firehose":
+            if input_type == FIREHOSE:
                 if "KinesisFirehoseInputDescription" in describe_input:
                     if self.safe_get(input, "kinesis.resource_arn", "") != self.safe_get(describe_input,
                                                                                          "KinesisFirehoseInputDescription.ResourceARN",
@@ -603,12 +610,12 @@ class KinesisDataAnalyticsApp:
 
             input_type = self.safe_get(item, "kinesis.input_type", "")
 
-            if input_type == "streams":
+            if input_type == STREAMS:
                 input_item["KinesisStreamsInputUpdate"] = {
                     "ResourceARNUpdate": self.safe_get(item, "kinesis.resource_arn", ""),
                     "RoleARNUpdate": self.safe_get(item, "kinesis.role_arn", ""),
                 }
-            elif input_type == "firehose":
+            elif input_type == FIREHOSE:
                 input_item["KinesisFirehoseInputUpdate"] = {
                     "ResourceARNUpdate": self.safe_get(item, "kinesis.resource_arn", ""),
                     "RoleARNUpdate": self.safe_get(item, "kinesis.role_arn", ""),
@@ -622,11 +629,11 @@ class KinesisDataAnalyticsApp:
                 }
 
             format_type = self.safe_get(item, "schema.format.format_type", "")
-            if format_type == "JSON":
+            if format_type == FORMAT_JSON:
                 input_item["InputSchemaUpdate"]["RecordFormatUpdate"]["MappingParameters"]["JSONMappingParameters"] = {
                     "RecordRowPath": self.safe_get(item, "schema.format.json_mapping_row_path", ""),
                 }
-            elif format_type == "CSV":
+            elif format_type == FORMAT_CSV:
                 input_item["InputSchemaUpdate"]["RecordFormatUpdate"]["MappingParameters"]["CSVMappingParameters"] = {
                     "RecordRowDelimiter": self.safe_get(item, "schema.format.csv_mapping_row_delimiter", ""),
                     "RecordColumnDelimiter": self.safe_get(item, "schema.format.csv_mapping_column_delimiter", ""),
@@ -661,17 +668,17 @@ class KinesisDataAnalyticsApp:
                 }
             }
             output_type = self.safe_get(item, "output_type", "")
-            if output_type == "streams":
+            if output_type == STREAMS:
                 output["KinesisStreamsOutputUpdate"] = {
                     "ResourceARNUpdate": self.safe_get(item, "resource_arn", ""),
                     "RoleARNUpdate": self.safe_get(item, "role_arn", ""),
                 }
-            elif output_type == "firehose":
+            elif output_type == FIREHOSE:
                 output["KinesisFirehoseOutputUpdate"] = {
                     "ResourceARNUpdate": self.safe_get(item, "resource_arn", ""),
                     "RoleARNUpdate": self.safe_get(item, "role_arn", ""),
                 }
-            elif output_type == "lambda":
+            elif output_type == LAMBDA:
                 output["LambdaOutputUpdate"] = {
                     "ResourceARNUpdate": self.safe_get(item, "resource_arn", ""),
                     "RoleARNUpdate": self.safe_get(item, "role_arn", ""),
