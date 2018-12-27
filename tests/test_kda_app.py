@@ -242,25 +242,6 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.create_application.assert_called_once()
         self.assert_error_message('create application failed:')
 
-    ''' temporary rest
-    def test_start_application_when_create_application_succeed(self):
-        self.setup_for_create_application()
-
-        self.app.process_request()
-
-        self.app.client.start_application.assert_called_once()
-
-    @data('NOW', 'TRIM_HORIZON', 'LAST_STOPPED_POINT')
-    def test_start_application_called_with_expected_parameters(self, value):
-        self.setup_for_create_application()
-        self.app.module.params['starting_position'] = value
-
-        self.app.process_request()
-
-        self.app.client.start_application.assert_called_once_with(ApplicationName='testifyApp',
-                                                                  InputConfigurations=self.get_input_start_configuration())
-    '''
-
     def test_update_application_gets_called_when_code_changes(self):
         self.setup_for_update_application(app_code='codeontheserver',
                                           inputs=self.get_expected_describe_input_configuration(),
@@ -1100,21 +1081,6 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
                     return True
 
         return False
-
-    def get_input_start_configuration(self):
-        expected = []
-
-        item = {
-            'Id': '1.1',
-            'InputStartingPositionConfiguration': {}
-        }
-
-        item['InputStartingPositionConfiguration']['InputStartingPosition'] = self.app.module.params[
-            'starting_position']
-
-        expected.append(item)
-
-        return expected
 
     def setup_for_create_application(self):
         resource_not_found = {'Error': {'Code': 'ResourceNotFoundException'}}

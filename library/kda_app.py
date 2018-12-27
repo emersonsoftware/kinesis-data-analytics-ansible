@@ -89,10 +89,6 @@ class KinesisDataAnalyticsApp:
                               stream_arn=dict(required=True, type="str"),
                               role_arn=dict(required=True, type="str")
                               ),
-                    starting_position=dict(default="LAST_STOPPED_POINT",
-                                           choices=["NOW", "TRIM_HORIZON", "LAST_STOPPED_POINT"],
-                                           type="str"
-                                           ),
                     check_timeout=dict(required=False, default=300, type="int"),
                     wait_between_check=dict(required=False, default=5, type="int"),
                     state=dict(default="present", choices=["present", "absent"]),
@@ -138,10 +134,6 @@ class KinesisDataAnalyticsApp:
         except BotoCoreError as e:
             self.module.fail_json(msg="delete application failed: {}".format(e))
             raise e
-
-    def start_application(self):
-        self.client.start_application(ApplicationName=self.safe_get(self.module.params, "name", None),
-                                      InputConfigurations=self.get_input_start_configuration())
 
     def create_new_application(self):
         args = {"ApplicationName": self.safe_get(self.module.params, "name", None),
@@ -414,21 +406,6 @@ class KinesisDataAnalyticsApp:
                 })
 
         return logs
-
-    def get_input_start_configuration(self):
-        input_config = []
-
-        item = {
-            "Id": "1.1",
-            "InputStartingPositionConfiguration": {}
-        }
-
-        item["InputStartingPositionConfiguration"]["InputStartingPosition"] = self.safe_get(self.module.params,
-                                                                                            "starting_position", "")
-
-        input_config.append(item)
-
-        return input_config
 
     def get_app_update_configuration(self):
         update_config = {}
