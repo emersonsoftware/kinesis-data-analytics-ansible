@@ -22,6 +22,7 @@ FORMAT_CSV = "CSV"
 STATE_PRESENT = "present"
 STATE_ABSENT = "absent"
 
+
 # BJF: Top-level thoughts:
 #      1: There is typically a "flower-box" style comment at the top where you claim authorship and document your license (needed for open sourcing)
 #      2: It is customary to document your module"s usage.  See the APIGW modules for examples.
