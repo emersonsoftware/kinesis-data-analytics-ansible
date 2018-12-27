@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-__version__ = '${version}'
+__version__ = "${version}"
 
 import time
 
@@ -16,16 +16,8 @@ except ImportError:
 
 # BJF: Top-level thoughts:
 #      1: There is typically a "flower-box" style comment at the top where you claim authorship and document your license (needed for open sourcing)
-#      2: It is customary to document your module's usage.  See the APIGW modules for examples.
+#      2: It is customary to document your module"s usage.  See the APIGW modules for examples.
 #         Well-formed docs of this style can be used to generate documentation
-#      3: Error handling is insufficient.  Basically, any failure path should cause a well-behaved
-#         invocation of fail_json with an appropriate error message.  As-is, exceptions will bubble straight
-#         to the user and crash the run.
-#      4: There are a lot of happy path assumptions about how well-formed inputs and outputs will be.
-#         For things not enforced by the module argument spec and especially for boto output, I would
-#         strongly advise switching from []-based key lookup to using .get() with valid default arguments
-#      5: It is idiomatic for your module when things are happy to return an object that shows the state of
-#         the thing you just created/changed.  This is very useful when debugging.
 class KinesisDataAnalyticsApp:
     current_state = None
     changed = False
@@ -33,80 +25,84 @@ class KinesisDataAnalyticsApp:
     def __init__(self, module):
         self.module = module
         if not HAS_BOTO3:
-            self.module.fail_json(msg='boto and boto3 are required for this module')
-        self.client = boto3.client('kinesisanalytics')
+            self.module.fail_json(msg="boto and boto3 are required for this module")
+        self.client = boto3.client("kinesisanalytics")
 
     @staticmethod
     def _define_module_argument_spec():
-        # BJF: This would be a bit more complete if the dictionary more aggressively enforced the full schema.
-        #      As it stands, there are likely a number of corner cases that can/will arise due to unexpected
-        #      permutations of invalid input
-        return dict(name=dict(required=True),
-                    description=dict(required=False, default=''),
-                    code=dict(required=True),
+        return dict(name=dict(required=True, type="str"),
+                    description=dict(required=False, default="", type="str"),
+                    code=dict(required=True, type="str"),
                     inputs=dict(
                         required=True,
-                        type='list',
-                        name_prefix=dict(required=True),
-                        parallelism=dict(required=False, default=1, type='int'),
+                        type="list",
+                        name_prefix=dict(required=True, type="str"),
+                        parallelism=dict(required=False, default=1, type="int"),
                         kinesis=dict(required=True,
                                      input_type=dict(required=True,
-                                                     default='streams',
-                                                     choices=['streams', 'firehose']
+                                                     default="streams",
+                                                     choices=["streams", "firehose"],
+                                                     type="str"
                                                      ),
-                                     resource_arn=dict(required=True),
-                                     role_arn=dict(required=True),
+                                     resource_arn=dict(required=True, type="str"),
+                                     role_arn=dict(required=True, type="str"),
                                      ),
                         pre_processor=dict(required=False,
-                                           resource_arn=dict(required=True),
-                                           role_arn=dict(required=True),
+                                           resource_arn=dict(required=True, type="str"),
+                                           role_arn=dict(required=True, type="str"),
                                            ),
                         schema=dict(required=True,
                                     columns=dict(required=True,
-                                                 type='list',
-                                                 name=dict(required=True),
-                                                 column_type=dict(required=True),
-                                                 mapping=dict(required=True)
+                                                 type="list",
+                                                 name=dict(required=True, type="str"),
+                                                 column_type=dict(required=True, type="str"),
+                                                 mapping=dict(required=True, type="str")
                                                  ),
                                     format=dict(required=True,
                                                 format_type=dict(required=True,
-                                                                 choices=['JSON', 'CSV']
+                                                                 choices=["JSON", "CSV"],
+                                                                 type="str",
                                                                  ),
-                                                json_mapping_row_path=dict(required=False),
-                                                csv_mapping_row_delimiter=dict(required=False),
-                                                csv_mapping_column_delimiter=dict(required=False),
+                                                json_mapping_row_path=dict(required=False, type="str"),
+                                                csv_mapping_row_delimiter=dict(required=False, type="str"),
+                                                csv_mapping_column_delimiter=dict(required=False, type="str"),
                                                 ),
                                     ),
                     ),
                     outputs=dict(required=False,
-                                 type='list',
-                                 name=dict(required=True),
+                                 type="list",
+                                 name=dict(required=True, type="str"),
                                  output_type=dict(required=True,
-                                                  options=['streams', 'firehose', 'lambda']
+                                                  options=["streams", "firehose", "lambda"],
+                                                  type="str",
                                                   ),
-                                 resource_arn=dict(required=True),
-                                 role_arn=dict(required=True),
+                                 resource_arn=dict(required=True, type="str"),
+                                 role_arn=dict(required=True, type="str"),
                                  format_type=dict(required=True,
-                                                  options=['JSON', 'CSV']),
+                                                  options=["JSON", "CSV"],
+                                                  type="str"
+                                                  ),
                                  ),
                     logs=dict(required=False,
-                              type='list',
-                              stream_arn=dict(required=True),
-                              role_arn=dict(required=True)
+                              type="list",
+                              stream_arn=dict(required=True, type="str"),
+                              role_arn=dict(required=True, type="str")
                               ),
-                    starting_position=dict(default='LAST_STOPPED_POINT',
-                                           choices=['NOW', 'TRIM_HORIZON', 'LAST_STOPPED_POINT']),
-                    check_timeout=dict(required=False, default=300, type='int'),
-                    wait_between_check=dict(required=False, default=5, type='int'),
+                    starting_position=dict(default="LAST_STOPPED_POINT",
+                                           choices=["NOW", "TRIM_HORIZON", "LAST_STOPPED_POINT"],
+                                           type="str"
+                                           ),
+                    check_timeout=dict(required=False, default=300, type="int"),
+                    wait_between_check=dict(required=False, default=5, type="int"),
                     )
 
     def process_request(self):
         try:
             status = self.get_current_state()
-            if status is 'AppNotFound':
+            if status is "AppNotFound":
                 self.create_new_application()
                 self.changed = True
-            elif status is 'AppFound':
+            elif status is "AppFound":
                 if self.is_app_updatable_state_changed():
                     self.update_application()
                     self.changed = True
@@ -119,19 +115,19 @@ class KinesisDataAnalyticsApp:
         self.module.exit_json(changed=self.changed, kda_app=self.current_state)
 
     def start_application(self):
-        self.client.start_application(ApplicationName=self.module.params['name'],
+        self.client.start_application(ApplicationName=self.safe_get(self.module.params, "name", None),
                                       InputConfigurations=self.get_input_start_configuration())
 
     def create_new_application(self):
-        args = {'ApplicationName': self.module.params['name'],
-                'ApplicationDescription': self.module.params['description'],
-                'Inputs': [self.get_input_configuration()],
-                'Outputs': self.get_output_configuration(),
-                'ApplicationCode': self.module.params['code']
+        args = {"ApplicationName": self.safe_get(self.module.params, "name", None),
+                "ApplicationDescription": self.safe_get(self.module.params, "description", None),
+                "Inputs": [self.get_input_configuration()],
+                "Outputs": self.get_output_configuration(),
+                "ApplicationCode": self.safe_get(self.module.params, "code", None)
                 }
 
-        if 'logs' in self.module.params and self.module.params['logs'] is not None:
-            args['CloudWatchLoggingOptions'] = self.get_log_configuration()
+        if "logs" in self.module.params and self.module.params["logs"] is not None:
+            args["CloudWatchLoggingOptions"] = self.get_log_configuration()
         try:
             self.client.create_application(**args)
         except BotoCoreError as e:
@@ -140,9 +136,10 @@ class KinesisDataAnalyticsApp:
 
     def update_application(self):
         try:
-            self.client.update_application(ApplicationName=self.module.params['name'],
-                                           CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                               'ApplicationVersionId'],
+            self.client.update_application(ApplicationName=self.safe_get(self.module.params, "name", None),
+                                           CurrentApplicationVersionId=
+                                           self.safe_get(self.current_state, "ApplicationDetail.ApplicationVersionId",
+                                                         None),
                                            ApplicationUpdate=self.get_app_update_configuration())
         except BotoCoreError as e:
             self.module.fail_json(msg="update application failed: {}".format(e))
@@ -153,55 +150,59 @@ class KinesisDataAnalyticsApp:
         self.patch_logs()
 
     def patch_outputs(self):
-        for item in self.module.params['outputs']:
-            matched_describe_outputs = [i for i in self.current_state['ApplicationDetail']['OutputDescriptions'] if
-                                        i['Name'] == item['name']]
+        for item in self.safe_get(self.module.params, "outputs", []):
+            matched_describe_outputs = [i for i in
+                                        self.safe_get(self.current_state, "ApplicationDetail.OutputDescriptions", []) if
+                                        self.safe_get(i, "Name", "") == item["name"]]
             if len(matched_describe_outputs) <= 0:
                 self.wait_till_updatable_state()
                 try:
-                    self.client.add_application_output(ApplicationName=self.module.params['name'],
+                    self.client.add_application_output(ApplicationName=self.safe_get(self.module.params, "name", None),
                                                        CurrentApplicationVersionId=
-                                                       self.current_state['ApplicationDetail'][
-                                                           'ApplicationVersionId'],
+                                                       self.safe_get(self.current_state,
+                                                                     "ApplicationDetail.ApplicationVersionId", None),
                                                        Output=self.get_single_output_configuration(item))
                 except BotoCoreError as e:
                     self.module.fail_json(msg="add application output failed: {}".format(e))
                     raise e
                 self.changed = True
 
-        for item in self.current_state['ApplicationDetail']['OutputDescriptions']:
-            matched_desired_outputs = [i for i in self.module.params['outputs'] if
-                                       i['name'] == item['Name']]
+        for item in self.safe_get(self.current_state, "ApplicationDetail.OutputDescriptions", []):
+            matched_desired_outputs = [i for i in self.safe_get(self.module.params, "outputs", []) if
+                                       self.safe_get(i, "name", "") == item["Name"]]
             if len(matched_desired_outputs) <= 0:
                 self.wait_till_updatable_state()
                 try:
                     self.client.delete_application_output(
-                        ApplicationName=self.module.params['name'],
-                        CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                            'ApplicationVersionId'],
-                        OutputId=item['OutputId'])
+                        ApplicationName=self.safe_get(self.module.params, "name", None),
+                        CurrentApplicationVersionId=self.safe_get(self.current_state,
+                                                                  "ApplicationDetail.ApplicationVersionId", None),
+                        OutputId=self.safe_get(item, "OutputId", None))
                 except BotoCoreError as e:
                     self.module.fail_json(msg="delete application output failed: {}".format(e))
                     raise e
                 self.changed = True
 
     def patch_logs(self):
-        if 'logs' in self.module.params and self.module.params['logs'] != None:
-            for item in self.module.params['logs']:
-                if 'CloudWatchLoggingOptionDescriptions' in self.current_state['ApplicationDetail']:
-                    matched_describe_logs = [i for i in self.current_state['ApplicationDetail'][
-                        'CloudWatchLoggingOptionDescriptions'] if
-                                             i['LogStreamARN'] == item['stream_arn']]
+        if "logs" in self.module.params and self.module.params["logs"] != None:
+            for item in self.module.params["logs"]:
+                if "CloudWatchLoggingOptionDescriptions" in self.safe_get(self.current_state, "ApplicationDetail", {}):
+                    matched_describe_logs = [i for i in self.safe_get(self.current_state,
+                                                                      "ApplicationDetail.CloudWatchLoggingOptionDescriptions",
+                                                                      []) if
+                                             self.safe_get(i, "LogStreamARN", "") == self.safe_get(item, "stream_arn",
+                                                                                                   "")]
                     if len(matched_describe_logs) <= 0:
                         self.wait_till_updatable_state()
                         try:
                             self.client.add_application_cloud_watch_logging_option(
-                                ApplicationName=self.module.params['name'],
-                                CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                    'ApplicationVersionId'],
+                                ApplicationName=self.safe_get(self.module.params, "name", None),
+                                CurrentApplicationVersionId=self.safe_get(self.current_state,
+                                                                          "ApplicationDetail.ApplicationVersionId",
+                                                                          None),
                                 CloudWatchLoggingOption={
-                                    'LogStreamARN': item['stream_arn'],
-                                    'RoleARN': item['role_arn']
+                                    "LogStreamARN": self.safe_get(item, "stream_arn", ""),
+                                    "RoleARN": self.safe_get(item, "role_arn", "")
                                 })
                         except BotoCoreError as e:
                             self.module.fail_json(msg="add application logging failed: {}".format(e))
@@ -211,32 +212,33 @@ class KinesisDataAnalyticsApp:
                     self.wait_till_updatable_state()
                     try:
                         self.client.add_application_cloud_watch_logging_option(
-                            ApplicationName=self.module.params['name'],
+                            ApplicationName=self.safe_get(self.module.params, "name", None),
                             CurrentApplicationVersionId=
-                            self.current_state['ApplicationDetail'][
-                                'ApplicationVersionId'],
+                            self.safe_get(self.current_state, "ApplicationDetail.ApplicationVersionId", None),
                             CloudWatchLoggingOption={
-                                'LogStreamARN': item['stream_arn'],
-                                'RoleARN': item['role_arn']
+                                "LogStreamARN": self.safe_get(item, "stream_arn", ""),
+                                "RoleARN": self.safe_get(item, "role_arn", "")
                             })
                     except BotoCoreError as e:
                         self.module.fail_json(msg="add application logging failed: {}".format(e))
                         raise e
                     self.changed = True
 
-        if 'CloudWatchLoggingOptionDescriptions' in self.current_state['ApplicationDetail']:
-            for item in self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions']:
-                if 'logs' in self.module.params:
-                    matched_desired_logs = [i for i in self.module.params['logs'] if
-                                            i['stream_arn'] == item['LogStreamARN']]
+        if "CloudWatchLoggingOptionDescriptions" in self.safe_get(self.current_state, "ApplicationDetail", {}):
+            for item in self.safe_get(self.current_state, "ApplicationDetail.CloudWatchLoggingOptionDescriptions", []):
+                if "logs" in self.module.params:
+                    matched_desired_logs = [i for i in self.safe_get(self.module.params, "logs", []) if
+                                            self.safe_get(i, "stream_arn", "") == self.safe_get(item, "LogStreamARN",
+                                                                                                "")]
                     if len(matched_desired_logs) <= 0:
                         self.wait_till_updatable_state()
                         try:
                             self.client.delete_application_cloud_watch_logging_option(
-                                ApplicationName=self.module.params['name'],
-                                CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                    'ApplicationVersionId'],
-                                CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                                ApplicationName=self.safe_get(self.module.params, "name", None),
+                                CurrentApplicationVersionId=self.safe_get(self.current_state,
+                                                                          "ApplicationDetail.ApplicationVersionId",
+                                                                          None),
+                                CloudWatchLoggingOptionId=self.safe_get(item, "CloudWatchLoggingOptionId", None))
                         except BotoCoreError as e:
                             self.module.fail_json(msg="delete application logging failed: {}".format(e))
                             raise e
@@ -246,10 +248,10 @@ class KinesisDataAnalyticsApp:
                     self.wait_till_updatable_state()
                     try:
                         self.client.delete_application_cloud_watch_logging_option(
-                            ApplicationName=self.module.params['name'],
-                            CurrentApplicationVersionId=self.current_state['ApplicationDetail'][
-                                'ApplicationVersionId'],
-                            CloudWatchLoggingOptionId=item['CloudWatchLoggingOptionId'])
+                            ApplicationName=self.safe_get(self.module.params, "name", None),
+                            CurrentApplicationVersionId=self.safe_get(self.current_state,
+                                                                      "ApplicationDetail.ApplicationVersionId", None),
+                            CloudWatchLoggingOptionId=self.safe_get(item, "CloudWatchLoggingOptionId", None))
                     except BotoCoreError as e:
                         self.module.fail_json(msg="delete application logging failed: {}".format(e))
                         raise e
@@ -258,139 +260,133 @@ class KinesisDataAnalyticsApp:
     def get_current_state(self):
         from botocore.exceptions import ClientError
         try:
-            self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
-            return 'AppFound'
+            self.current_state = self.client.describe_application(
+                ApplicationName=self.safe_get(self.module.params, "name", None))
+            return "AppFound"
         except ClientError as err:
-            # BJF: Not sure if ClientError is guaranteed to have this structure, but using .get() with a default
-            #      arg is a safe way to avoid blowing up when accessing nested structures
-            if err.response['Error']['Code'] == "ResourceNotFoundException":
-                return 'AppNotFound'
+            if self.safe_get(err.response, "Error.Code", "") == "ResourceNotFoundException":
+                return "AppNotFound"
             else:
                 self.module.fail_json(msg="unable to obtain current state of application: {}".format(err))
                 raise err
 
     def get_final_state(self):
         try:
-            self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
+            self.current_state = self.client.describe_application(
+                ApplicationName=self.safe_get(self.module.params, "name", None))
         except BotoCoreError as e:
             self.module.fail_json(msg="unable to obtain final state of application: {}".format(e))
             raise e
 
     def wait_till_updatable_state(self):
-        wait_complete = time.time() + self.module.params['check_timeout']
+        wait_complete = time.time() + self.safe_get(self.module.params, "check_timeout", 300)
         while time.time() < wait_complete:
-            self.current_state = self.client.describe_application(ApplicationName=self.module.params['name'])
-            if self.current_state['ApplicationDetail']['ApplicationStatus'] in ['READY', 'RUNNING']:
+            self.current_state = self.client.describe_application(
+                ApplicationName=self.safe_get(self.module.params, "name", None))
+            if self.safe_get(self.current_state, "ApplicationDetail.ApplicationStatus", "") in ["READY", "RUNNING"]:
                 return
-            time.sleep(self.module.params['wait_between_check'])
+            time.sleep(self.safe_get(self.module.params, "wait_between_check", 5))
         self.module.fail_json(msg="wait for updatable application timeout on %s" % time.asctime())
-        raise Exception('wait for updatable state timeout')
+        raise Exception("wait for updatable state timeout")
 
     def get_input_configuration(self):
         inputs = []
-        for item in self.module.params['inputs']:
+        for item in self.safe_get(self.module.params, "inputs", []):
             inputs.append(self.get_single_input_configuration(item))
 
         return inputs
 
     def get_single_input_configuration(self, item):
-        # BJF: What happens in here if malformed input is provided?
-        #      How are you informing the user to what's wrong?  E.g. what would happen if I provided schema.formmmat.type?
-        #      This may be an oversimplification, but there are really two options here:
-        #        1: Update the module spec to aggressively enforce the expected schema permutations
-        #        2: Add a lot of defensive code here to enforce the schema and provide useful feedback on error
         input_item = {
-            'NamePrefix': item['name_prefix'],
-            'InputParallelism': {
-                'Count': item['parallelism']
+            "NamePrefix": self.safe_get(item, "name_prefix", ""),
+            "InputParallelism": {
+                "Count": self.safe_get(item, "parallelism", 0)
             },
-            'InputSchema': {
-                'RecordFormat': {
-                    'RecordFormatType': item['schema']['format']['format_type'],
-                    'MappingParameters': {}
+            "InputSchema": {
+                "RecordFormat": {
+                    "RecordFormatType": self.safe_get(item, "schema.format.format_type", ""),
+                    "MappingParameters": {}
                 },
-                'RecordColumns': [],
+                "RecordColumns": [],
             }
         }
 
-        if item['kinesis']['input_type'] == 'streams':
-            input_item['KinesisStreamsInput'] = {
-                'ResourceARN': item['kinesis']['resource_arn'],
-                'RoleARN': item['kinesis']['role_arn'],
+        if self.safe_get(item, "kinesis.input_type", "") == "streams":
+            input_item["KinesisStreamsInput"] = {
+                "ResourceARN": self.safe_get(item, "kinesis.resource_arn", ""),
+                "RoleARN": self.safe_get(item, "kinesis.role_arn", ""),
             }
-        elif item['kinesis']['input_type'] == 'firehose':
-            input_item['KinesisFirehoseInput'] = {
-                'ResourceARN': item['kinesis']['resource_arn'],
-                'RoleARN': item['kinesis']['role_arn'],
-            }
-
-        if 'pre_processor' in item:
-            input_item['InputProcessingConfiguration'] = {}
-            input_item['InputProcessingConfiguration']['InputLambdaProcessor'] = {
-                'ResourceARN': item['pre_processor']['resource_arn'],
-                'RoleARN': item['pre_processor']['role_arn'],
+        elif self.safe_get(item, "kinesis.input_type", "") == "firehose":
+            input_item["KinesisFirehoseInput"] = {
+                "ResourceARN": self.safe_get(item, "kinesis.resource_arn", ""),
+                "RoleARN": self.safe_get(item, "kinesis.role_arn", ""),
             }
 
-        if item['schema']['format']['format_type'] == 'JSON':
-            input_item['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'] = {
-                'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
-            }
-        elif item['schema']['format']['format_type'] == 'CSV':
-            input_item['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'] = {
-                'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
-                'RecordColumnDelimiter': item['schema']['format'][
-                    'csv_mapping_column_delimiter'],
+        if "pre_processor" in item:
+            input_item["InputProcessingConfiguration"] = {}
+            input_item["InputProcessingConfiguration"]["InputLambdaProcessor"] = {
+                "ResourceARN": self.safe_get(item, "pre_processor.resource_arn", ""),
+                "RoleARN": self.safe_get(item, "pre_processor.role_arn", ""),
             }
 
-        for column in item['schema']['columns']:
-            input_item['InputSchema']['RecordColumns'].append({
-                'Mapping': column['mapping'],
-                'Name': column['name'],
-                'SqlType': column['column_type'],
+        if self.safe_get(item, "schema.format.format_type", "") == "JSON":
+            input_item["InputSchema"]["RecordFormat"]["MappingParameters"]["JSONMappingParameters"] = {
+                "RecordRowPath": self.safe_get(item, "schema.format.json_mapping_row_path", ""),
+            }
+        elif self.safe_get(item, "schema.format.format_type", "") == "CSV":
+            input_item["InputSchema"]["RecordFormat"]["MappingParameters"]["CSVMappingParameters"] = {
+                "RecordRowDelimiter": self.safe_get(item, "schema.format.csv_mapping_row_delimiter", ""),
+                "RecordColumnDelimiter": self.safe_get(item, "schema.format.csv_mapping_column_delimiter", ""),
+            }
+
+        for column in self.safe_get(item, "schema.columns", []):
+            input_item["InputSchema"]["RecordColumns"].append({
+                "Mapping": self.safe_get(column, "mapping", ""),
+                "Name": self.safe_get(column, "name", ""),
+                "SqlType": self.safe_get(column, "column_type", ""),
             })
         return input_item
 
     def get_output_configuration(self):
         outputs = []
 
-        for item in self.module.params['outputs']:
+        for item in self.safe_get(self.module.params, "outputs", []):
             outputs.append(self.get_single_output_configuration(item))
 
         return outputs
 
     def get_single_output_configuration(self, item):
-        # BJF: Same general comments about validation and error returns
         output = {
-            'Name': item['name'],
-            'DestinationSchema': {
-                'RecordFormatType': item['format_type']
+            "Name": self.safe_get(item, "name", None),
+            "DestinationSchema": {
+                "RecordFormatType": self.safe_get(item, "format_type", "")
             }
         }
-        if item['output_type'] == 'streams':
-            output['KinesisStreamsOutput'] = {
-                'ResourceARN': item['resource_arn'],
-                'RoleARN': item['role_arn'],
+        if self.safe_get(item, "output_type", "") == "streams":
+            output["KinesisStreamsOutput"] = {
+                "ResourceARN": self.safe_get(item, "resource_arn", ""),
+                "RoleARN": self.safe_get(item, "role_arn", ""),
             }
-        elif item['output_type'] == 'firehose':
-            output['KinesisFirehoseOutput'] = {
-                'ResourceARN': item['resource_arn'],
-                'RoleARN': item['role_arn'],
+        elif self.safe_get(item, "output_type", "") == "firehose":
+            output["KinesisFirehoseOutput"] = {
+                "ResourceARN": self.safe_get(item, "resource_arn", ""),
+                "RoleARN": self.safe_get(item, "role_arn", ""),
             }
-        elif item['output_type'] == 'lambda':
-            output['LambdaOutput'] = {
-                'ResourceARN': item['resource_arn'],
-                'RoleARN': item['role_arn'],
+        elif self.safe_get(item, "output_type", "") == "lambda":
+            output["LambdaOutput"] = {
+                "ResourceARN": self.safe_get(item, "resource_arn", ""),
+                "RoleARN": self.safe_get(item, "role_arn", ""),
             }
 
         return output
 
     def get_log_configuration(self):
         logs = []
-        if 'logs' in self.module.params and self.module.params['logs'] != None:
-            for item in self.module.params['logs']:
+        if "logs" in self.module.params and self.module.params["logs"] != None:
+            for item in self.module.params["logs"]:
                 logs.append({
-                    'LogStreamARN': item['stream_arn'],
-                    'RoleARN': item['role_arn'],
+                    "LogStreamARN": self.safe_get(item, "stream_arn", ""),
+                    "RoleARN": self.safe_get(item, "role_arn", ""),
                 })
 
         return logs
@@ -399,11 +395,12 @@ class KinesisDataAnalyticsApp:
         input_config = []
 
         item = {
-            'Id': '1.1',
-            'InputStartingPositionConfiguration': {}
+            "Id": "1.1",
+            "InputStartingPositionConfiguration": {}
         }
 
-        item['InputStartingPositionConfiguration']['InputStartingPosition'] = self.module.params['starting_position']
+        item["InputStartingPositionConfiguration"]["InputStartingPosition"] = self.safe_get(self.module.params,
+                                                                                            "starting_position", "")
 
         input_config.append(item)
 
@@ -412,205 +409,232 @@ class KinesisDataAnalyticsApp:
     def get_app_update_configuration(self):
         update_config = {}
 
-        if self.module.params['code'] != self.current_state['ApplicationDetail']['ApplicationCode']:
-            update_config['ApplicationCodeUpdate'] = self.module.params['code']
+        if self.safe_get(self.module.params, "code", None) != self.safe_get(self.current_state,
+                                                                            "ApplicationDetail.ApplicationCode", None):
+            update_config["ApplicationCodeUpdate"] = self.safe_get(self.module.params, "code", None)
 
         if self.is_input_configuration_change():
-            update_config['InputUpdates'] = self.get_input_update_configuration()
+            update_config["InputUpdates"] = self.get_input_update_configuration()
 
         if self.is_output_configuration_change():
-            update_config['OutputUpdates'] = self.get_output_update_configuration()
+            update_config["OutputUpdates"] = self.get_output_update_configuration()
 
         if self.is_log_configuration_changed():
-            update_config['CloudWatchLoggingOptionUpdates'] = self.get_log_update_configuration()
+            update_config["CloudWatchLoggingOptionUpdates"] = self.get_log_update_configuration()
 
         return update_config
 
     def is_app_updatable_state_changed(self):
-        return self.module.params['code'] != self.current_state['ApplicationDetail'][
-            'ApplicationCode'] or self.is_input_configuration_change() or self.is_output_configuration_change() or self.is_log_configuration_changed()
+        return self.safe_get(self.module.params, "code", "") != self.safe_get(self.current_state,
+                                                                              "ApplicationDetail.ApplicationCode",
+                                                                              "") or self.is_input_configuration_change() or self.is_output_configuration_change() or self.is_log_configuration_changed()
 
     def is_output_configuration_change(self):
-        for output in self.module.params['outputs']:
-            matched_describe_outputs = [i for i in self.current_state['ApplicationDetail']['OutputDescriptions'] if
-                                        i['Name'] == output['name']]
+        for output in self.safe_get(self.module.params, "outputs", []):
+            matched_describe_outputs = [i for i in
+                                        self.safe_get(self.current_state, "ApplicationDetail.OutputDescriptions", []) if
+                                        self.safe_get(i, "Name", "") == self.safe_get(output, "name", "")]
             if len(matched_describe_outputs) != 1:
                 continue
             describe_output = matched_describe_outputs[0]
 
-            if output['output_type'] == 'streams':
-                if 'KinesisStreamsOutputDescription' not in describe_output:
+            output_type = self.safe_get(output, "output_type", "")
+
+            if output_type == "streams":
+                if "KinesisStreamsOutputDescription" not in describe_output:
                     return True
-                if output['resource_arn'] != describe_output['KinesisStreamsOutputDescription']['ResourceARN']:
+                if output["resource_arn"] != self.safe_get(describe_output,
+                                                           "KinesisStreamsOutputDescription.ResourceARN", ""):
                     return True
-                if output['role_arn'] != describe_output['KinesisStreamsOutputDescription']['RoleARN']:
+                if output["role_arn"] != self.safe_get(describe_output, "KinesisStreamsOutputDescription.RoleARN", ""):
                     return True
 
-            if output['output_type'] == 'firehose':
-                if 'KinesisFirehoseOutputDescription' not in describe_output:
+            if output_type == "firehose":
+                if "KinesisFirehoseOutputDescription" not in describe_output:
                     return True
-                if output['resource_arn'] != describe_output['KinesisFirehoseOutputDescription']['ResourceARN']:
+                if output["resource_arn"] != self.safe_get(describe_output,
+                                                           "KinesisFirehoseOutputDescription.ResourceARN", ""):
                     return True
-                if output['role_arn'] != describe_output['KinesisFirehoseOutputDescription']['RoleARN']:
-                    return True
-
-            if output['output_type'] == 'lambda':
-                if 'LambdaOutputDescription' not in describe_output:
-                    return True
-                if output['resource_arn'] != describe_output['LambdaOutputDescription']['ResourceARN']:
-                    return True
-                if output['role_arn'] != describe_output['LambdaOutputDescription']['RoleARN']:
+                if output["role_arn"] != self.safe_get(describe_output, "KinesisFirehoseOutputDescription.RoleARN", ""):
                     return True
 
-            if output['format_type'] != describe_output['DestinationSchema']['RecordFormatType']:
+            if output_type == "lambda":
+                if "LambdaOutputDescription" not in describe_output:
+                    return True
+                if output["resource_arn"] != self.safe_get(describe_output, "LambdaOutputDescription.ResourceARN", ""):
+                    return True
+                if output["role_arn"] != self.safe_get(describe_output, "LambdaOutputDescription.RoleARN", ""):
+                    return True
+
+            if self.safe_get(output, "format_type", "") != self.safe_get(describe_output,
+                                                                         "DestinationSchema.RecordFormatType", ""):
                 return True
 
         return False
 
     def is_input_configuration_change(self):
-        for input in self.module.params['inputs']:
-            matched_describe_inputs = [i for i in self.current_state['ApplicationDetail']['InputDescriptions'] if
-                                       i['NamePrefix'] == input['name_prefix']]
+        for input in self.safe_get(self.module.params, "inputs", []):
+            matched_describe_inputs = [i for i in
+                                       self.safe_get(self.current_state, "ApplicationDetail.InputDescriptions", []) if
+                                       self.safe_get(i, "NamePrefix", "") == self.safe_get(input, "name_prefix", "")]
             if len(matched_describe_inputs) != 1:
                 return True
             describe_input = matched_describe_inputs[0]
 
-            if input['schema']['format']['format_type'] != describe_input['InputSchema']['RecordFormat'][
-                'RecordFormatType']:
+            if self.safe_get(input, "schema.format.format_type", "") != self.safe_get(describe_input,
+                                                                                      "InputSchema.RecordFormat.RecordFormatType",
+                                                                                      ""):
                 return True
 
-            if input['schema']['format']['format_type'] == 'JSON':
-                if input['schema']['format']['json_mapping_row_path'] != \
-                        describe_input['InputSchema']['RecordFormat']['MappingParameters']['JSONMappingParameters'][
-                            'RecordRowPath']:
+            if self.safe_get(input, "schema.format.format_type", "") == "JSON":
+                if self.safe_get(input, "schema.format.json_mapping_row_path", "") != \
+                        self.safe_get(describe_input,
+                                      "InputSchema.RecordFormat.MappingParameters.JSONMappingParameters.RecordRowPath",
+                                      ""):
                     return True
 
-            if input['schema']['format']['format_type'] == 'CSV':
-                if input['schema']['format']['csv_mapping_row_delimiter'] != \
-                        describe_input['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'][
-                            'RecordRowDelimiter']:
+            if self.safe_get(input, "schema.format.format_type", "") == "CSV":
+                if self.safe_get(input, "schema.format.csv_mapping_row_delimiter", "") != \
+                        self.safe_get(describe_input,
+                                      "InputSchema.RecordFormat.MappingParameters.CSVMappingParameters.RecordRowDelimiter",
+                                      ""):
                     return True
-                if input['schema']['format']['csv_mapping_column_delimiter'] != \
-                        describe_input['InputSchema']['RecordFormat']['MappingParameters']['CSVMappingParameters'][
-                            'RecordColumnDelimiter']:
+                if self.safe_get(input, "schema.format.csv_mapping_column_delimiter", "") != \
+                        self.safe_get(describe_input,
+                                      "InputSchema.RecordFormat.MappingParameters.CSVMappingParameters.RecordColumnDelimiter",
+                                      ""):
                     return True
 
-            if len(input['schema']['columns']) != len(describe_input['InputSchema']['RecordColumns']):
+            if len(self.safe_get(input, "schema.columns", [])) != len(
+                    self.safe_get(describe_input, "InputSchema.RecordColumns", [])):
                 return True
 
-            for col in input['schema']['columns']:
-                matched_describe_cols = [i for i in describe_input['InputSchema']['RecordColumns'] if
-                                         i['Name'] == col['name']]
+            for col in self.safe_get(input, "schema.columns", []):
+                matched_describe_cols = [i for i in self.safe_get(describe_input, "InputSchema.RecordColumns", []) if
+                                         self.safe_get(i, "Name", "") == self.safe_get(col, "name", "")]
                 if len(matched_describe_cols) != 1:
                     return True
                 describe_col = matched_describe_cols[0]
-                if describe_col['SqlType'] != col['column_type'] or describe_col['Mapping'] != col['mapping']:
+                if self.safe_get(describe_col, "SqlType", "") != self.safe_get(col, "column_type", "") or self.safe_get(
+                        describe_col, "Mapping", "") != self.safe_get(col,
+                                                                      "mapping", ""):
                     return True
 
-            if input['parallelism'] != describe_input['InputParallelism']['Count']:
+            if self.safe_get(input, "parallelism", 0) != self.safe_get(describe_input, "InputParallelism.Count", 0):
                 return True
 
-            if input['kinesis']['input_type'] == 'streams':
-                if 'KinesisStreamsInputDescription' in describe_input:
-                    if input['kinesis']['resource_arn'] != describe_input['KinesisStreamsInputDescription'][
-                        'ResourceARN']:
+            input_type = self.safe_get(input, "kinesis.input_type", "")
+            if input_type == "streams":
+                if "KinesisStreamsInputDescription" in describe_input:
+                    if self.safe_get(input, "kinesis.resource_arn", "") != self.safe_get(describe_input,
+                                                                                         "KinesisStreamsInputDescription.ResourceARN",
+                                                                                         ""):
                         return True
-                    if input['kinesis']['role_arn'] != describe_input['KinesisStreamsInputDescription']['RoleARN']:
-                        return True
-
-            if input['kinesis']['input_type'] == 'firehose':
-                if 'KinesisFirehoseInputDescription' in describe_input:
-                    if input['kinesis']['resource_arn'] != describe_input['KinesisFirehoseInputDescription'][
-                        'ResourceARN']:
-                        return True
-                    if input['kinesis']['role_arn'] != describe_input['KinesisFirehoseInputDescription']['RoleARN']:
+                    if self.safe_get(input, "kinesis.role_arn", "") != self.safe_get(describe_input,
+                                                                                     "KinesisStreamsInputDescription.RoleARN",
+                                                                                     ""):
                         return True
 
-            if 'pre_processor' in input:
-                if 'InputProcessingConfigurationDescription' not in describe_input:
+            if input_type == "firehose":
+                if "KinesisFirehoseInputDescription" in describe_input:
+                    if self.safe_get(input, "kinesis.resource_arn", "") != self.safe_get(describe_input,
+                                                                                         "KinesisFirehoseInputDescription.ResourceARN",
+                                                                                         ""):
+                        return True
+                    if self.safe_get(input, "kinesis.role_arn", "") != self.safe_get(describe_input,
+                                                                                     "KinesisFirehoseInputDescription.RoleARN",
+                                                                                     ""):
+                        return True
+
+            if "pre_processor" in input:
+                if "InputProcessingConfigurationDescription" not in describe_input:
                     return True
-                if input['pre_processor']['resource_arn'] != \
-                        describe_input['InputProcessingConfigurationDescription']['InputLambdaProcessorDescription'][
-                            'ResourceARN']:
+                if self.safe_get(input, "pre_processor.resource_arn", "") != \
+                        self.safe_get(describe_input,
+                                      "InputProcessingConfigurationDescription.InputLambdaProcessorDescription.ResourceARN",
+                                      ""):
                     return True
-                if input['pre_processor']['role_arn'] != \
-                        describe_input['InputProcessingConfigurationDescription']['InputLambdaProcessorDescription'][
-                            'RoleARN']:
+                if self.safe_get(input, "pre_processor.role_arn", "") != \
+                        self.safe_get(describe_input,
+                                      "InputProcessingConfigurationDescription.InputLambdaProcessorDescription.RoleARN",
+                                      ""):
                     return True
 
         return False
 
     def is_log_configuration_changed(self):
-        if 'logs' not in self.module.params or self.module.params['logs'] == None:
+        if "logs" not in self.module.params or self.module.params["logs"] == None:
             return False
 
-        for log in self.module.params['logs']:
+        for log in self.safe_get(self.module.params, "logs", []):
             matched_describe_logs = [i for i in
-                                     self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
-                                     i['LogStreamARN'] == log['stream_arn']]
+                                     self.safe_get(self.current_state, "ApplicationDetail.CloudWatchLoggingOptionDescriptions", []) if
+                                     self.safe_get(i, "LogStreamARN", "") == self.safe_get(log, "stream_arn", "")]
             if len(matched_describe_logs) != 1:
                 continue
             describe_log = matched_describe_logs[0]
 
-            if log['role_arn'] != describe_log['RoleARN']:
+            if self.safe_get(log, "role_arn", "") != self.safe_get(describe_log, "RoleARN", ""):
                 return True
 
         return False
 
     def get_input_update_configuration(self):
         expected = []
-        for item in self.module.params['inputs']:
-            describe_inputs = self.current_state['ApplicationDetail']['InputDescriptions']
+        for item in self.safe_get(self.module.params, "inputs", []):
+            describe_inputs = self.safe_get(self.current_state, "ApplicationDetail.InputDescriptions", [])
 
             input_item = {
-                'InputId': describe_inputs[0]['InputId'],
-                'NamePrefixUpdate': item['name_prefix'],
-                'InputParallelismUpdate': {
-                    'CountUpdate': item['parallelism']
+                "InputId": self.safe_get(describe_inputs[0], "InputId", None),
+                "NamePrefixUpdate": self.safe_get(item, "name_prefix", None),
+                "InputParallelismUpdate": {
+                    "CountUpdate": self.safe_get(item, "parallelism", 0)
                 },
-                'InputSchemaUpdate': {
-                    'RecordFormatUpdate': {
-                        'RecordFormatType': item['schema']['format']['format_type'],
-                        'MappingParameters': {}
+                "InputSchemaUpdate": {
+                    "RecordFormatUpdate": {
+                        "RecordFormatType": self.safe_get(item, "schema.format.format_type", ""),
+                        "MappingParameters": {}
                     },
-                    'RecordColumnUpdates': [],
+                    "RecordColumnUpdates": [],
                 }
             }
 
-            if item['kinesis']['input_type'] == 'streams':
-                input_item['KinesisStreamsInputUpdate'] = {
-                    'ResourceARNUpdate': item['kinesis']['resource_arn'],
-                    'RoleARNUpdate': item['kinesis']['role_arn'],
+            input_type = self.safe_get(item, "kinesis.input_type", "")
+
+            if input_type == "streams":
+                input_item["KinesisStreamsInputUpdate"] = {
+                    "ResourceARNUpdate": self.safe_get(item, "kinesis.resource_arn", ""),
+                    "RoleARNUpdate": self.safe_get(item, "kinesis.role_arn", ""),
                 }
-            elif item['kinesis']['input_type'] == 'firehose':
-                input_item['KinesisFirehoseInputUpdate'] = {
-                    'ResourceARNUpdate': item['kinesis']['resource_arn'],
-                    'RoleARNUpdate': item['kinesis']['role_arn'],
+            elif input_type == "firehose":
+                input_item["KinesisFirehoseInputUpdate"] = {
+                    "ResourceARNUpdate": self.safe_get(item, "kinesis.resource_arn", ""),
+                    "RoleARNUpdate": self.safe_get(item, "kinesis.role_arn", ""),
                 }
 
-            if 'pre_processor' in item:
-                input_item['InputProcessingConfigurationUpdate'] = {}
-                input_item['InputProcessingConfigurationUpdate']['InputLambdaProcessorUpdate'] = {
-                    'ResourceARNUpdate': item['pre_processor']['resource_arn'],
-                    'RoleARNUpdate': item['pre_processor']['role_arn'],
+            if "pre_processor" in item:
+                input_item["InputProcessingConfigurationUpdate"] = {}
+                input_item["InputProcessingConfigurationUpdate"]["InputLambdaProcessorUpdate"] = {
+                    "ResourceARNUpdate": self.safe_get(item, "pre_processor.resource_arn", ""),
+                    "RoleARNUpdate": self.safe_get(item, "pre_processor.role_arn", ""),
                 }
 
-            if item['schema']['format']['format_type'] == 'JSON':
-                input_item['InputSchemaUpdate']['RecordFormatUpdate']['MappingParameters']['JSONMappingParameters'] = {
-                    'RecordRowPath': item['schema']['format']['json_mapping_row_path'],
+            format_type = self.safe_get(item, "schema.format.format_type", "")
+            if format_type == "JSON":
+                input_item["InputSchemaUpdate"]["RecordFormatUpdate"]["MappingParameters"]["JSONMappingParameters"] = {
+                    "RecordRowPath": self.safe_get(item, "schema.format.json_mapping_row_path", ""),
                 }
-            elif item['schema']['format']['format_type'] == 'CSV':
-                input_item['InputSchemaUpdate']['RecordFormatUpdate']['MappingParameters']['CSVMappingParameters'] = {
-                    'RecordRowDelimiter': item['schema']['format']['csv_mapping_row_delimiter'],
-                    'RecordColumnDelimiter': item['schema']['format'][
-                        'csv_mapping_column_delimiter'],
+            elif format_type == "CSV":
+                input_item["InputSchemaUpdate"]["RecordFormatUpdate"]["MappingParameters"]["CSVMappingParameters"] = {
+                    "RecordRowDelimiter": self.safe_get(item, "schema.format.csv_mapping_row_delimiter", ""),
+                    "RecordColumnDelimiter": self.safe_get(item, "schema.format.csv_mapping_column_delimiter", ""),
                 }
 
-            for column in item['schema']['columns']:
-                input_item['InputSchemaUpdate']['RecordColumnUpdates'].append({
-                    'Mapping': column['mapping'],
-                    'Name': column['name'],
-                    'SqlType': column['column_type'],
+            for column in self.safe_get(item, "schema.columns", []):
+                input_item["InputSchemaUpdate"]["RecordColumnUpdates"].append({
+                    "Mapping": self.safe_get(column, "mapping", ""),
+                    "Name": self.safe_get(column, "name", ""),
+                    "SqlType": self.safe_get(column, "column_type", ""),
                 })
             expected.append(input_item)
 
@@ -619,34 +643,35 @@ class KinesisDataAnalyticsApp:
     def get_output_update_configuration(self):
         expected = []
 
-        for item in self.module.params['outputs']:
-            matched_describe_outputs = [i for i in self.current_state['ApplicationDetail']['OutputDescriptions'] if
-                                        i['Name'] == item['name']]
+        for item in self.safe_get(self.module.params, "outputs", []):
+            matched_describe_outputs = [i for i in self.safe_get(self.current_state, "ApplicationDetail.OutputDescriptions", []) if
+                                        self.safe_get(i, "Name", "") == self.safe_get(item, "name", "")]
 
             if len(matched_describe_outputs) != 1:
                 continue
 
             output = {
-                'OutputId': matched_describe_outputs[0]['OutputId'],
-                'NameUpdate': item['name'],
-                'DestinationSchemaUpdate': {
-                    'RecordFormatType': item['format_type']
+                "OutputId": self.safe_get(matched_describe_outputs[0], "OutputId", None),
+                "NameUpdate": self.safe_get(item, "name", None),
+                "DestinationSchemaUpdate": {
+                    "RecordFormatType": self.safe_get(item, "format_type", "")
                 }
             }
-            if item['output_type'] == 'streams':
-                output['KinesisStreamsOutputUpdate'] = {
-                    'ResourceARNUpdate': item['resource_arn'],
-                    'RoleARNUpdate': item['role_arn'],
+            output_type = self.safe_get(item, "output_type", "")
+            if output_type == "streams":
+                output["KinesisStreamsOutputUpdate"] = {
+                    "ResourceARNUpdate": self.safe_get(item, "resource_arn", ""),
+                    "RoleARNUpdate": self.safe_get(item, "role_arn", ""),
                 }
-            elif item['output_type'] == 'firehose':
-                output['KinesisFirehoseOutputUpdate'] = {
-                    'ResourceARNUpdate': item['resource_arn'],
-                    'RoleARNUpdate': item['role_arn'],
+            elif output_type == "firehose":
+                output["KinesisFirehoseOutputUpdate"] = {
+                    "ResourceARNUpdate": self.safe_get(item, "resource_arn", ""),
+                    "RoleARNUpdate": self.safe_get(item, "role_arn", ""),
                 }
-            elif item['output_type'] == 'lambda':
-                output['LambdaOutputUpdate'] = {
-                    'ResourceARNUpdate': item['resource_arn'],
-                    'RoleARNUpdate': item['role_arn'],
+            elif output_type == "lambda":
+                output["LambdaOutputUpdate"] = {
+                    "ResourceARNUpdate": self.safe_get(item, "resource_arn", ""),
+                    "RoleARNUpdate": self.safe_get(item, "role_arn", ""),
                 }
             expected.append(output)
 
@@ -655,22 +680,32 @@ class KinesisDataAnalyticsApp:
     def get_log_update_configuration(self):
         expected = []
 
-        for item in self.module.params['logs']:
+        for item in self.safe_get(self.module.params, "logs", []):
             matched_describe_logs = [i for i in
-                                     self.current_state['ApplicationDetail']['CloudWatchLoggingOptionDescriptions'] if
-                                     i['LogStreamARN'] == item['stream_arn']]
+                                     self.safe_get(self.current_state, "ApplicationDetail.CloudWatchLoggingOptionDescriptions", []) if
+                                     self.safe_get(i, "LogStreamARN", "") == self.safe_get(item, "stream_arn", "")]
 
             if len(matched_describe_logs) != 1:
                 continue
 
             log = {
-                'CloudWatchLoggingOptionId': matched_describe_logs[0]['CloudWatchLoggingOptionId'],
-                'LogStreamARNUpdate': item['stream_arn'],
-                'RoleARNUpdate': item['role_arn']
+                "CloudWatchLoggingOptionId": self.safe_get(matched_describe_logs[0], "CloudWatchLoggingOptionId", None),
+                "LogStreamARNUpdate": self.safe_get(item, "stream_arn", ""),
+                "RoleARNUpdate": self.safe_get(item, "role_arn", "")
             }
             expected.append(log)
 
         return expected
+
+    def safe_get(self, dct, path, default_value):
+        nested_keys = path.split(".")
+        try:
+            actual = dct
+            for k in nested_keys:
+                actual = actual[k]
+            return actual
+        except KeyError:
+            return default_value
 
 
 def main():
@@ -684,5 +719,5 @@ def main():
 
 
 # from ansible.module_utils.basic import *  # pylint: disable=W0614
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
