@@ -730,6 +730,6 @@ def main():
     kda_app.process_request()
 
 
-# from ansible.module_utils.basic import *  # pylint: disable=W0614
+from ansible.module_utils.basic import *  # pylint: disable=W0614
 if __name__ == "__main__":
     main()
