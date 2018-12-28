@@ -413,8 +413,8 @@ class KinesisDataAnalyticsApp:
     def get_app_update_configuration(self):
         update_config = {}
 
-        if self.safe_get(self.module.params, "code", None) != self.safe_get(self.current_state,
-                                                                            "ApplicationDetail.ApplicationCode", None):
+        if self.safe_get(self.module.params, "code", "").replace("\n", "") != self.safe_get(self.current_state,
+                                                                            "ApplicationDetail.ApplicationCode", "").replace("\n", ""):
             update_config["ApplicationCodeUpdate"] = self.safe_get(self.module.params, "code", None)
 
         if self.is_input_configuration_change():
@@ -429,9 +429,9 @@ class KinesisDataAnalyticsApp:
         return update_config
 
     def is_app_updatable_state_changed(self):
-        return self.safe_get(self.module.params, "code", "") != self.safe_get(self.current_state,
+        return self.safe_get(self.module.params, "code", "").replace("\n", "") != self.safe_get(self.current_state,
                                                                               "ApplicationDetail.ApplicationCode",
-                                                                              "") or self.is_input_configuration_change() or self.is_output_configuration_change() or self.is_log_configuration_changed()
+                                                                              "").replace("\n", "") or self.is_input_configuration_change() or self.is_output_configuration_change() or self.is_log_configuration_changed()
 
     def is_output_configuration_change(self):
         for output in self.safe_get(self.module.params, "outputs", []):
