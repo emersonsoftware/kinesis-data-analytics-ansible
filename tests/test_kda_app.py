@@ -197,7 +197,7 @@ class TestKinesisDataAnalyticsApp(unittest.TestCase):
         self.app.client.create_application.assert_called_once_with(ApplicationName=mock.ANY,
                                                                    ApplicationDescription=mock.ANY,
                                                                    ApplicationCode=mock.ANY,
-                                                                   Inputs=[self.get_expected_input_configuration()],
+                                                                   Inputs=self.get_expected_input_configuration(),
                                                                    Outputs=mock.ANY, CloudWatchLoggingOptions=mock.ANY)
 
     def test_create_application_output_parameter_mapped_correctly(self):

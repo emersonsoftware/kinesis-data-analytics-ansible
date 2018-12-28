@@ -141,7 +141,7 @@ class KinesisDataAnalyticsApp:
     def create_new_application(self):
         args = {"ApplicationName": self.safe_get(self.module.params, "name", None),
                 "ApplicationDescription": self.safe_get(self.module.params, "description", None),
-                "Inputs": [self.get_input_configuration()],
+                "Inputs": self.get_input_configuration(),
                 "Outputs": self.get_output_configuration(),
                 "ApplicationCode": self.safe_get(self.module.params, "code", None)
                 }
