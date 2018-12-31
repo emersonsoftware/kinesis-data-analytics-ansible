@@ -1,5 +1,369 @@
 #!/usr/bin/python
 
+# Kinesis Data Analytics Ansible Modules
+#
+# Modules in this project allow management of the AWS Kinesis Data Analytics service.
+#
+# Authors:
+#  - Pratik Patel <github: patelpratikEmerson>
+#
+# kda_app
+#    Manage creation, update, and removal of Kinesis Data Analytics resources
+
+# MIT License
+#
+# Copyright (c) 2019 Pratik Patel, Emerson
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+DOCUMENTATION = '''
+module: kda_app
+author: Pratik Patel
+short_description: Add, update, or remove Kinesis Data Analytics resources
+description:
+  - Create if no Kinesis Data Analytics Application resource is found matching the provided name
+  - Delete Kinesis Data Analytics Application resource matching the provided name
+  - Updates Kinesis Data Analytics Application resource matching the provided name
+version_added: "1.0"
+options:
+  name:
+    description:
+    - The name of the Kinesis Data Analytics Application
+    type: string
+    required: True
+  description:
+    description:
+    - Description of the Kinesis Data Analytics Application
+    type: string
+    default: ''
+    required: False
+  inputs:
+    description:
+    - List of source stream, at the moment Kinesis Data Analytics Application allows only one input source
+    type: list
+    required: True
+    options:
+      name_prefix:
+        description:
+        - Name prefix to use when creating an in-application stream
+        type: string
+        required: True
+      parallelism:
+        description:
+        - Number of in-application streams to create
+        type: int
+        default: 1
+        required: False
+      kinesis:
+        description:
+        - Specifies what type of input stream and their ARNs
+        type: dict
+        required: True
+          options:
+            input_type:
+              description:
+              - Specifies type of source to read from
+              type: string
+              choices: ['streams', 'firehose']
+              required: True
+            resource_arn:
+              description:
+              - ARN of the source to read from
+              type: string
+              required: True
+            role_arn:
+              description:
+              - ARN of the IAM role that Amazon Kinesis Analytics can assume to read from the source
+              type: string
+              required: True
+      pre_processor:
+        description:
+        - Specifies pre processor which applies transformation on records after reading from source stream and before feeding into kda_app
+        type: dict
+        required: False
+          options:
+            resource_arn:
+              description:
+              - The ARN of the AWS Lambda function that operates on records in the stream
+              type: string
+              required: True
+            role_arn:
+              description:
+              - The ARN of the IAM role that is used to access the AWS Lambda function
+              type: string
+              required: True
+      schema:
+        description:
+        - Describes the format of the data in the streaming source
+        type: dict
+        required: True
+          options:
+            columns:
+              description:
+              - A list of RecordColumn objects
+              type: list
+              required: True
+              options:
+                name:
+                  description:
+                  - Name of the column created in the in-application input stream or reference table
+                  type: string
+                  required: True
+                column_type:
+                  description:
+                  - Type of column created in the in-application input stream or reference table
+                  type: string
+                  required: True
+                mapping:
+                  description:
+                  - Reference to the data element in the streaming input of the reference data source
+                  type: string
+                  required: True
+            format:
+              description:
+              - Specifies the format of the records on the streaming source
+              type: dict
+              required: True
+              options:
+                format_type:
+                  description:
+                  - The type of record format
+                  type: string
+                  choices: ['JSON', 'CSV']
+                  required: True
+                json_mapping_row_path:
+                  description:
+                  - Path to the top-level parent that contains the records
+                  type: string
+                  required: False
+                csv_mapping_row_delimiter:
+                  description:
+                  - Row delimiter. For example, in a CSV format, 'n' is the typical row delimiter
+                  type: string
+                  required: False
+                csv_mapping_column_delimiter:
+                  description:
+                  - Column delimiter. For example, in a CSV format, a comma (",") is the typical column delimiter
+                  type: string
+                  required: False
+  outputs:
+    description:
+    - List of destinations where application output can write data from any of the in-application streams
+    - These destinations can be Amazon Kinesis streams, Amazon Kinesis Firehose delivery streams, AWS Lambda destinations, or any combination of the three
+    type: list
+    required: False
+    options:
+      name:
+        description:
+        - Name of the in-application stream
+        type: string
+        required: True
+      output_type:
+        description:
+        - Specifies type of destination to wite to
+        type: string
+        choices: ['streams', 'firehose', 'lambda']
+        required: True
+      resource_arn:
+        description:
+        - ARN of the destination to write to
+        type: string
+        required: True
+      role_arn:
+        description:
+        - ARN of the IAM role that Amazon Kinesis Analytics can assume to write to the destination
+        type: string
+        required: True
+      format_type:
+        description:
+        - Specifies the format of the records on the output stream
+        type: string
+        choices: ['JSON', 'CSV']
+        required: True
+  logs:
+    description:
+    - List of CloudWatch log streams to monitor application configuration errors
+    type: list
+    required: False
+    options:
+      stream_arn:
+        description:
+        - ARN of the CloudWatch log to receive application messages
+        type: string
+        required: True
+      role_arn:
+        description:
+        - IAM ARN of the role to use to send application messages
+        type: string
+        required: True
+  check_timeout:
+    description:
+    - Specifies maximum amount of time to wait for kda_app to become updatable
+    type: int
+    default: 300
+    required: False
+  wait_between_check:
+    description:
+    - Specifies how many seconds to wait before checking status of kda_app again
+    type: int
+    default: 5
+    required: False
+  state:
+    description:
+    - Should kda_app exist or not
+    choices: ['present', 'absent']
+    default: 'present'
+    required: False
+requirements:
+    - python = 2.7
+    - boto
+    - boto3
+notes:
+    - While it is possible via the boto api to create/update/delete Amazon Kinesis Analytics app with Flink runtime, this module does not support runtime Flink it only supports applications with SQL runtime.
+    - This module requires that you have boto and boto3 installed and that your credentials are created or stored in a way that is compatible (see U(https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration)).
+'''
+
+EXAMPLES = '''
+---
+- hosts: localhost
+  gather_facts: False
+  tasks:
+  - name: kinesis data analytics creation
+    kda_app:
+      name: "testApp"
+      description: "my testApp does cool things"
+      state: "present"
+      code: "CREATE OR REPLACE STREAM ..."
+      inputs:
+        - name_prefix: "SOURCE_SQL_STREAM"
+          parallelism: 1
+          kinesis:
+            input_type: streams
+            resource_arn: "arn:aws:kinesis:us-east-1:myAccount:stream/input"
+            role_arn: "arn:aws:iam::myAccount:role/someRole"
+          schema:
+            columns:
+              - name: "sensor"
+                column_type: "VARCHAR(10)"
+                mapping: "$.sensorId"
+              - name: "isIndoorSensor"
+                column_type: "BOOLEAN"
+                mapping: "$.isIndoorSensor"
+            format:
+              format_type: "JSON"
+              json_mapping_row_path: "$"
+      outputs:
+        - name: "DESTINATION_SQL_STREAM"
+          output_type: "streams"
+          resource_arn: "arn:aws:kinesis:us-east-1:myAccount:stream/output"
+          role_arn: "arn:aws:iam::myAccount:role/someRole"
+          format_type: "JSON"
+    register: kdaapp
+
+  - debug: var=kdaapp
+'''
+
+RETURN = '''
+{
+    "kdaapp": {
+        "changed": false, 
+        "failed": false, 
+        "kda_app": {
+            "ApplicationDetail": {
+                "ApplicationARN": "arn:aws:kinesisanalytics:us-east-1:myAccount:application/testApp", 
+                "ApplicationCode": "CREATE OR REPLACE STREAM ...", 
+                "ApplicationDescription": "my testApp does cool things", 
+                "ApplicationName": "testApp", 
+                "ApplicationStatus": "READY", 
+                "ApplicationVersionId": 1, 
+                "CreateTimestamp": "2018-12-28T15:49:37-06:00", 
+                "InputDescriptions": [
+                    {
+                        "InAppStreamNames": [
+                            "SOURCE_SQL_STREAM_001"
+                        ], 
+                        "InputId": "1.1", 
+                        "InputParallelism": {
+                            "Count": 1
+                        }, 
+                        "InputSchema": {
+                            "RecordColumns": [
+                                {
+                                    "Mapping": "$.sensorId", 
+                                    "Name": "sensor", 
+                                    "SqlType": "VARCHAR(10)"
+                                }, 
+                                {
+                                    "Mapping": "$.isIndoorSensor", 
+                                    "Name": "isIndoorSensor", 
+                                    "SqlType": "BOOLEAN"
+                                }
+                            ], 
+                            "RecordFormat": {
+                                "MappingParameters": {
+                                    "JSONMappingParameters": {
+                                        "RecordRowPath": "$"
+                                    }
+                                }, 
+                                "RecordFormatType": "JSON"
+                            }
+                        }, 
+                        "InputStartingPositionConfiguration": {}, 
+                        "KinesisStreamsInputDescription": {
+                            "ResourceARN": "arn:aws:kinesis:us-east-1:myAccount:stream/input", 
+                            "RoleARN": "arn:aws:iam::myAccount:role/someRole"
+                        }, 
+                        "NamePrefix": "SOURCE_SQL_STREAM"
+                    }
+                ], 
+                "LastUpdateTimestamp": "2018-12-28T15:49:37-06:00", 
+                "OutputDescriptions": [
+                    {
+                        "DestinationSchema": {
+                            "RecordFormatType": "JSON"
+                        }, 
+                        "KinesisStreamsOutputDescription": {
+                            "ResourceARN": "arn:aws:kinesis:us-east-1:myAccount:stream/output", 
+                            "RoleARN": "arn:aws:iam::myAccount:role/someRole"
+                        }, 
+                        "Name": "DESTINATION_SQL_STREAM", 
+                        "OutputId": "1.1"
+                    }
+                ]
+            }, 
+            "ResponseMetadata": {
+                "HTTPHeaders": {
+                    "content-length": "16053", 
+                    "content-type": "application/x-amz-json-1.1", 
+                    "date": "Mon, 31 Dec 2018 16:12:48 GMT", 
+                    "x-amzn-requestid": "some id"
+                }, 
+                "HTTPStatusCode": 200, 
+                "RequestId": "some id", 
+                "RetryAttempts": 0
+            }
+        }
+    }
+}
+'''
+
 __version__ = "${version}"
 
 import time
@@ -21,6 +385,7 @@ FORMAT_JSON = "JSON"
 FORMAT_CSV = "CSV"
 STATE_PRESENT = "present"
 STATE_ABSENT = "absent"
+
 
 class KinesisDataAnalyticsApp:
     current_state = None
@@ -414,7 +779,8 @@ class KinesisDataAnalyticsApp:
         update_config = {}
 
         if self.safe_get(self.module.params, "code", "").replace("\n", "") != self.safe_get(self.current_state,
-                                                                            "ApplicationDetail.ApplicationCode", "").replace("\n", ""):
+                                                                                            "ApplicationDetail.ApplicationCode",
+                                                                                            "").replace("\n", ""):
             update_config["ApplicationCodeUpdate"] = self.safe_get(self.module.params, "code", None)
 
         if self.is_input_configuration_change():
@@ -430,8 +796,9 @@ class KinesisDataAnalyticsApp:
 
     def is_app_updatable_state_changed(self):
         return self.safe_get(self.module.params, "code", "").replace("\n", "") != self.safe_get(self.current_state,
-                                                                              "ApplicationDetail.ApplicationCode",
-                                                                              "").replace("\n", "") or self.is_input_configuration_change() or self.is_output_configuration_change() or self.is_log_configuration_changed()
+                                                                                                "ApplicationDetail.ApplicationCode",
+                                                                                                "").replace("\n",
+                                                                                                            "") or self.is_input_configuration_change() or self.is_output_configuration_change() or self.is_log_configuration_changed()
 
     def is_output_configuration_change(self):
         for output in self.safe_get(self.module.params, "outputs", []):
@@ -726,5 +1093,6 @@ def main():
 
 
 from ansible.module_utils.basic import *  # pylint: disable=W0614
+
 if __name__ == "__main__":
     main()
