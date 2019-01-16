@@ -501,7 +501,6 @@ class KinesisDataAnalyticsApp:
                                                                          "ApplicationDetail.CreateTimestamp", None))
         except BotoCoreError as e:
             self.module.fail_json(msg="delete application failed: {}".format(e))
-            raise e
 
     def create_new_application(self):
         args = {"ApplicationName": self.safe_get(self.module.params, "name", None),
@@ -517,7 +516,6 @@ class KinesisDataAnalyticsApp:
             self.client.create_application(**args)
         except BotoCoreError as e:
             self.module.fail_json(msg="create application failed: {}".format(e))
-            raise e
 
     def update_application(self):
         try:
@@ -528,7 +526,6 @@ class KinesisDataAnalyticsApp:
                                            ApplicationUpdate=self.get_app_update_configuration())
         except BotoCoreError as e:
             self.module.fail_json(msg="update application failed: {}".format(e))
-            raise e
 
     def patch_application(self):
         self.patch_outputs()
@@ -549,7 +546,6 @@ class KinesisDataAnalyticsApp:
                                                        Output=self.get_single_output_configuration(item))
                 except BotoCoreError as e:
                     self.module.fail_json(msg="add application output failed: {}".format(e))
-                    raise e
                 self.changed = True
 
         for item in self.safe_get(self.current_state, "ApplicationDetail.OutputDescriptions", []):
@@ -565,7 +561,6 @@ class KinesisDataAnalyticsApp:
                         OutputId=self.safe_get(item, "OutputId", None))
                 except BotoCoreError as e:
                     self.module.fail_json(msg="delete application output failed: {}".format(e))
-                    raise e
                 self.changed = True
 
     def patch_logs(self):
@@ -591,7 +586,6 @@ class KinesisDataAnalyticsApp:
                                 })
                         except BotoCoreError as e:
                             self.module.fail_json(msg="add application logging failed: {}".format(e))
-                            raise e
                         self.changed = True
                 else:
                     self.wait_till_updatable_state()
@@ -606,7 +600,6 @@ class KinesisDataAnalyticsApp:
                             })
                     except BotoCoreError as e:
                         self.module.fail_json(msg="add application logging failed: {}".format(e))
-                        raise e
                     self.changed = True
 
         if "CloudWatchLoggingOptionDescriptions" in self.safe_get(self.current_state, "ApplicationDetail", {}):
@@ -626,7 +619,6 @@ class KinesisDataAnalyticsApp:
                                 CloudWatchLoggingOptionId=self.safe_get(item, "CloudWatchLoggingOptionId", None))
                         except BotoCoreError as e:
                             self.module.fail_json(msg="delete application logging failed: {}".format(e))
-                            raise e
                         self.changed = True
 
                 else:
@@ -639,7 +631,6 @@ class KinesisDataAnalyticsApp:
                             CloudWatchLoggingOptionId=self.safe_get(item, "CloudWatchLoggingOptionId", None))
                     except BotoCoreError as e:
                         self.module.fail_json(msg="delete application logging failed: {}".format(e))
-                        raise e
                     self.changed = True
 
     def get_current_state(self):
@@ -660,7 +651,6 @@ class KinesisDataAnalyticsApp:
                 ApplicationName=self.safe_get(self.module.params, "name", None))
         except BotoCoreError as e:
             self.module.fail_json(msg="unable to obtain final state of application: {}".format(e))
-            raise e
 
     def wait_till_updatable_state(self):
         wait_complete = time.time() + self.safe_get(self.module.params, "check_timeout", 300)
