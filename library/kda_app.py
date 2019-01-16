@@ -367,6 +367,7 @@ RETURN = '''
 __version__ = "${version}"
 
 import time
+from ansible.module_utils.basic import *  # pylint: disable=W0614
 
 try:
     import boto3
@@ -643,7 +644,6 @@ class KinesisDataAnalyticsApp:
                 return STATE_ABSENT
             else:
                 self.module.fail_json(msg="unable to obtain current state of application: {}".format(err))
-                raise err
 
     def get_final_state(self):
         try:
@@ -661,7 +661,6 @@ class KinesisDataAnalyticsApp:
                 return
             time.sleep(safe_get(self.module.params, "wait_between_check", 5))
         self.module.fail_json(msg="wait for updatable application timeout on %s" % time.asctime())
-        raise Exception("wait for updatable state timeout")
 
     def get_input_configuration(self):
         inputs = []
@@ -1082,8 +1081,6 @@ def safe_get(dct, path, default_value):
     except KeyError:
         return default_value
 
-
-from ansible.module_utils.basic import *  # pylint: disable=W0614
 
 if __name__ == "__main__":
     main()
