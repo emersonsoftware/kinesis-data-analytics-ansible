@@ -236,7 +236,7 @@ requirements:
     - boto
     - boto3
 notes:
-    - While it is possible via the boto api to create/update/delete Amazon Kinesis Analytics app with Flink runtime, this module does not support runtime Flink it only supports applications with SQL runtime.
+    - While it is possible via the boto api to create/update/delete Amazon Kinesis Analytics application with Flink runtime, this module does not support runtime Flink it only supports applications with SQL runtime.
     - This module requires that you have boto and boto3 installed and that your credentials are created or stored in a way that is compatible (see U(https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration)).
 '''
 
